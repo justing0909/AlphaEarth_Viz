@@ -53,17 +53,19 @@ export default function Ingest() {
           </div>
 
           <div style={{display:'grid', gap:8}}>
-            <div style={{fontSize:18, fontWeight:700}}>Region</div>
+            <div style={{fontSize:18, fontWeight:700}}>Experiment Details</div>
             <pre style={{background:'#fafafa', padding:12, border:'1px solid #eee'}}>
 {JSON.stringify({
+  id: parsed.id,
   country: parsed.country,
-  bbox: parsed.bbox,
-  center: parsed.center,
   model: parsed.model,
-  testPct: parsed.testPct,
-  samples: parsed.samples,
-  trainSamples: parsed.trainSamples,
-  testSamples: parsed.testSamples
+  samples: {
+    total: parsed.samples,
+    train: parsed.trainSamples,
+    test: parsed.testSamples,
+    testPct: parsed.testPct
+  },
+  seed: parsed.seed
 }, null, 2)}
             </pre>
           </div>
