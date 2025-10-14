@@ -1,16 +1,19 @@
 import React, { useMemo, useState, useEffect } from 'react'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, /*Legend,*/ CartesianGrid, Cell, LabelList } from 'recharts'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList } from 'recharts'
 
 type ParsedRow = any
 
 export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: ParsedRow[]; topN?: number }){
   const data = useMemo(()=>{
     if(!rows || rows.length===0) return null
-    // collect importance per embedding per class label
+    
+    // Collect importance per embedding per SPECIFIC class (not "All other classes")
     const map = new Map<string, Map<string, number[]>>()
+    
     rows.forEach((r:any)=>{
       let embeddings = r.topEmbeddings || []
-      // fallback: try to parse embeddings from messy CSV in id field
+      
+      // Fallback parsing if needed
       if((!embeddings || embeddings.length===0) && typeof r.id === 'string'){
         const txt = r.id
         const pairs: Array<{ id: string; importance: number }> = []
@@ -25,21 +28,27 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
         pairs.sort((a,b)=>b.importance - a.importance)
         embeddings = pairs.slice(0,12)
       }
+      
       const c1 = r.classes?.c1Name || r.classes?.c1Code || 'class_1'
       const c2 = r.classes?.c2Name || r.classes?.c2Code || 'class_2'
-      ;[c1,c2].forEach((cl)=>{
-        if(!map.has(cl)) map.set(cl, new Map())
-        const m = map.get(cl)!;
-        (embeddings||[]).forEach((e:any)=>{
-          const id = String(e.id||e.name||e).toUpperCase()
-          const val = Number(e.importance ?? e[1] ?? 0)
-          if(!m.has(id)) m.set(id, [])
-          m.get(id)!.push(val)
-        })
+      
+      // FIXED: Only add to the specific class, not "All other classes"
+      const specificClass = c1 === 'All other classes' ? c2 : c1
+      
+      if(!map.has(specificClass)) map.set(specificClass, new Map())
+      const m = map.get(specificClass)!
+      
+      ;(embeddings||[]).forEach((e:any)=>{
+        const id = String(e.id||e.name||e).toUpperCase()
+        const val = Number(e.importance ?? e[1] ?? 0)
+        if(!m.has(id)) m.set(id, [])
+        m.get(id)!.push(val)
       })
     })
 
-    // compute embedding set and topN overall
+    console.log('Classes found after filtering:', Array.from(map.keys()))
+
+    // Compute embedding set and topN overall
     const embeddingSet = new Set<string>()
     Array.from(map.values()).forEach(m=> Array.from(m.keys()).forEach(k=>embeddingSet.add(k)))
     const embMeans: Record<string, number> = {}
@@ -54,7 +63,7 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
     const embMeanOverall = Object.keys(embMeans).map(k=>({id:k, mean: embMeans[k]})).sort((a,b)=>b.mean-a.mean)
     const topEmbeddings = embMeanOverall.slice(0, topN).map(d=>d.id)
 
-    // build chart rows per class, ordering embeddings per-class
+    // Build chart rows per class, ordering embeddings per-class
     const out: any[] = []
     Array.from(map.entries()).forEach(([cl,m])=>{
       const list: {emb:string; val:number}[] = []
@@ -72,7 +81,6 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
     return { out, topEmbeddings }
   }, [rows, topN])
 
-  // hooks must be declared unconditionally
   const [hover, setHover] = useState<{ cls?: string; pos?: number; value?: number; emb?: string; x?: number; y?: number } | null>(null)
   const [visibleCount, setVisibleCount] = useState<number>(0)
 
@@ -81,10 +89,8 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
 
   useEffect(()=>{
     function recompute(){
-      // use window width (viewport) to avoid inflated container widths caused by long SVG/content
       const width = window.innerWidth || 800
-      // estimate minimal group width per class: use a small per-bar width to allow tight packing
-      const perBarBase = 6 // px per bar (narrow)
+      const perBarBase = 6
       const groupWidth = Math.max(20, topEmbeddings.length * perBarBase + 4)
       const count = Math.max(1, Math.floor(width / groupWidth))
       setVisibleCount(count)
@@ -94,7 +100,6 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
     return ()=> window.removeEventListener('resize', recompute)
   },[topEmbeddings.length, chartDataFull.length])
 
-  // choose top classes by total importance so the most relevant are shown when space is limited
   const chartData = useMemo(()=>{
     if(!chartDataFull || chartDataFull.length===0) return []
     const ranked = chartDataFull.map((row:any)=>{
@@ -104,6 +109,7 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
     }).sort((a,b)=>b._sum - a._sum)
     return ranked.slice(0, Math.max(1, visibleCount || ranked.length))
   },[chartDataFull, topEmbeddings, visibleCount])
+  
   const positions = Array.from({ length: topEmbeddings.length }).map((_,i)=>i)
 
   const darkRed = '#bb0303ff'
@@ -122,22 +128,29 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
 
   if(!data || !data.out || data.out.length===0 || chartData.length===0) return <div>No embedding importance data available.</div>
 
-  // compute required pixel width so class groups don't stretch across entire viewport
   const groupWidthPx = Math.max(20, topEmbeddings.length * barSize + 4)
   const requiredWidth = Math.max(300, (visibleCount || chartDataFull.length) * groupWidthPx)
 
   return (
-    <div style={{width:'100%', maxWidth:'100%', border:'1px solid #eee', borderRadius:8, padding:8}}>
-      <h3 style={{margin: '4px 0 8px 0'}}>Top embeddings importance by class</h3>
-      <div style={{width: requiredWidth, margin: '0 auto'}}>
+    <div style={{width:'100%', maxWidth:'100%', overflow: 'hidden'}}>
+      <div style={{width: '100%', maxWidth: requiredWidth, margin: '0 auto'}}>
         <ResponsiveContainer width="100%" height={320}>
-          <BarChart data={chartData} margin={{ top: 6, right: 6, left: 6, bottom: 20 }} barGap={compactMode?0:1} barCategoryGap={compactMode? '0%':'2%'}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="class" angle={-90} textAnchor="end" interval={0} tick={{ fontSize: 9 }} />
-          <YAxis label={{ value: 'Relative importance', angle: -90, position: 'insideLeft' }} />
-          {/* no legend to keep chart compact */}
+          <BarChart data={chartData} margin={{ top: 6, right: 6, left: 6, bottom: 80 }} barGap={compactMode?0:1} barCategoryGap={compactMode? '0%':'2%'}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f3f4" />
+          <XAxis 
+            dataKey="class" 
+            angle={-45} 
+            textAnchor="end" 
+            interval={0} 
+            tick={{ fontSize: 11, fill: '#5f6368' }}
+            height={70}
+          />
+          <YAxis 
+            label={{ value: 'Relative importance', angle: -90, position: 'insideLeft', style: { fill: '#5f6368', fontSize: 12 } }}
+            tick={{ fill: '#5f6368', fontSize: 11 }}
+          />
           {positions.map((posIndex:number)=> (
-            <Bar key={`pos${posIndex}`} dataKey={`pos${posIndex}`} radius={[0,0,0,0]} barSize={barSize}>
+            <Bar key={`pos${posIndex}`} dataKey={`pos${posIndex}`} radius={[2,2,0,0]} barSize={barSize}>
               {chartData.map((row:any, idx:number)=> (
                 <Cell
                   key={idx}
@@ -156,7 +169,7 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
                   const row = props && props.payload
                   const emb = row && row._embLabels && row._embLabels[posIndex] ? row._embLabels[posIndex] : ''
                   return emb
-                }} style={{fontSize:9}} />
+                }} style={{fontSize:9, fill: '#5f6368'}} />
               )}
             </Bar>
           ))}
@@ -164,9 +177,21 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
         </ResponsiveContainer>
       </div>
       {hover && (
-        <div style={{position:'fixed', left:(hover.x||0)+8, top:(hover.y||0)+8, background:'#fff', padding:6, border:'1px solid #ccc', borderRadius:6, pointerEvents:'none', zIndex:9999, fontSize:12}}>
-          <div style={{fontWeight:700}}>{hover.cls}</div>
-          <div>{hover.emb}: {Number(hover.value).toFixed(4)}</div>
+        <div style={{
+          position:'fixed', 
+          left:(hover.x||0)+8, 
+          top:(hover.y||0)+8, 
+          background:'#fff', 
+          padding: 8, 
+          border:'1px solid #dadce0', 
+          borderRadius:6, 
+          pointerEvents:'none', 
+          zIndex:9999, 
+          fontSize:12,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{fontWeight:500, color: '#202124'}}>{hover.cls}</div>
+          <div style={{ color: '#5f6368' }}>{hover.emb}: {Number(hover.value).toFixed(4)}</div>
         </div>
       )}
     </div>

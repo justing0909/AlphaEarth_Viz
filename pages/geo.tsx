@@ -2,11 +2,22 @@ import Layout from '@/components/Layout'
 import dynamic from 'next/dynamic'
 import { useFetch } from '@/lib/useFetch'
 import { useMemo } from 'react'
+import { useDarkMode } from '@/lib/useDarkMode'
 
 const LeafletMap = dynamic(()=>import('@/components/LeafletMap'), { ssr:false })
 
 export default function Geo(){
   const { data: importance } = useFetch<any[]>('importance','/api/importance')
+  const { darkMode } = useDarkMode()
+  
+  const theme = {
+    bg: darkMode ? '#0f0f0f' : '#fafafa',
+    cardBg: darkMode ? '#1a1a1a' : '#fff',
+    textPrimary: darkMode ? '#e8e8e8' : '#202124',
+    textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
+    border: darkMode ? '#333' : '#dadce0'
+  }
+  
   // Convert simple tiles to a toy GeoJSON polygon collection for demo
   const geo = useMemo(()=>{
     if(!importance) return null
@@ -37,10 +48,42 @@ export default function Geo(){
   },[importance])
 
   return (
-    <Layout>
-      <h1>Geo Importance</h1>
-      <p>Leaflet + Esri World Imagery base. Swap in your hex/tile GeoJSON and color by importance.</p>
-      <LeafletMap geojson={geo} />
+    <Layout darkMode={darkMode}>
+      <div style={{ 
+        maxWidth: 1600, 
+        margin: '0 auto', 
+        padding: '40px 24px',
+        background: theme.bg,
+        minHeight: '100vh',
+        transition: 'background 0.3s ease'
+      }}>
+        <h1 style={{ 
+          textAlign: 'center',
+          fontSize: 36,
+          fontWeight: 300,
+          color: theme.textPrimary,
+          marginBottom: 8,
+          letterSpacing: '-0.5px',
+          transition: 'color 0.3s ease'
+        }}>Geographic Distribution</h1>
+        <p style={{ 
+          textAlign: 'center',
+          color: theme.textSecondary,
+          fontSize: 15,
+          marginBottom: 32,
+          transition: 'color 0.3s ease'
+        }}>Bounding box importance with Esri World Imagery</p>
+        
+        <div style={{ 
+          background: theme.cardBg,
+          borderRadius: 8,
+          border: `1px solid ${theme.border}`,
+          padding: 20,
+          transition: 'all 0.3s ease'
+        }}>
+          <LeafletMap geojson={geo} />
+        </div>
+      </div>
     </Layout>
   )
 }
