@@ -8,10 +8,13 @@ interface EmbeddingCooccurrenceNetworkProps {
 
 export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: EmbeddingCooccurrenceNetworkProps) {
   const svgRef = useRef<SVGSVGElement>(null)
-  const [selectedEdge, setSelectedEdge] = useState<any>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [clickFrozenEdge, setClickFrozenEdge] = useState<any>(null)
   const [hoveredEdge, setHoveredEdge] = useState<any>(null)
   const simulationRef = useRef<any>(null)
+  const nodeSelectionRef = useRef<any>(null)
+  const linkSelectionRef = useRef<any>(null)
+  const labelSelectionRef = useRef<any>(null)
 
   useEffect(() => {
     if (!data || data.length === 0 || !svgRef.current) return
@@ -83,17 +86,6 @@ export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: Embeddi
     
     svg.call(zoom as any)
 
-    const getConnectedNodes = (nodeId: string) => {
-      const connected = new Set([nodeId])
-      links.forEach((link: any) => {
-        const sourceId = typeof link.source === 'object' ? link.source.id : link.source
-        const targetId = typeof link.target === 'object' ? link.target.id : link.target
-        if (sourceId === nodeId) connected.add(targetId)
-        if (targetId === nodeId) connected.add(sourceId)
-      })
-      return connected
-    }
-
     const isEdgeConnected = (edgeData: any, nodeId: string | null) => {
       if (!nodeId) return true
       const sourceId = typeof edgeData.source === 'object' ? edgeData.source.id : edgeData.source
@@ -118,69 +110,92 @@ export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: Embeddi
       .attr('stroke-opacity', 0.5)
       .attr('stroke-width', (d: any) => Math.sqrt(d.value))
       .style('cursor', 'pointer')
+      .style('pointer-events', 'auto')
       .on('mouseenter', function(event, d: any) {
-        // Only allow hover if: no node selected OR edge connects to selected node
-        // AND no edge is currently frozen
-        if (isEdgeConnected(d, selectedNode) && !selectedEdge) {
-          d3.select(this)
-            .attr('stroke', '#3b82f6')
-            .attr('stroke-opacity', 0.9)
-            .attr('stroke-width', Math.sqrt(d.value) * 1.5)
-          
-          setHoveredEdge(d)
-        }
+        // Don't interfere with click-frozen edges
+        if (clickFrozenEdge && isSameEdge(clickFrozenEdge, d)) return
+        
+        // Highlight this edge
+        d3.select(this)
+          .attr('stroke', '#3b82f6')
+          .attr('stroke-opacity', 0.9)
+          .attr('stroke-width', Math.sqrt(d.value) * 1.5)
+        
+        setHoveredEdge(d)
       })
       .on('mouseleave', function(event, d: any) {
-        // Only reset if no edge is frozen and this edge is hoverable
-        if (isEdgeConnected(d, selectedNode) && !selectedEdge) {
-          // Return to base state based on node selection
-          const baseOpacity = selectedNode && isEdgeConnected(d, selectedNode) ? 0.8 : 0.5
-          const baseWidth = selectedNode && isEdgeConnected(d, selectedNode) 
-            ? Math.sqrt(d.value) * 1.2
-            : Math.sqrt(d.value)
+        // Don't reset if this edge is click-frozen
+        if (clickFrozenEdge && isSameEdge(clickFrozenEdge, d)) return
+        
+        // Reset to base state based on current selection
+        // We need to recalculate because selectedNode might have changed
+        const currentlySelected = selectedNode
+        const isConnected = !currentlySelected || (
+          (typeof d.source === 'object' ? d.source.id : d.source) === currentlySelected ||
+          (typeof d.target === 'object' ? d.target.id : d.target) === currentlySelected
+        )
+        const baseOpacity = currentlySelected && isConnected ? 0.8 : 0.5
+        const baseWidth = currentlySelected && isConnected ? Math.sqrt(d.value) * 1.2 : Math.sqrt(d.value)
+        
+        d3.select(this)
+          .attr('stroke', '#999')
+          .attr('stroke-opacity', baseOpacity)
+          .attr('stroke-width', baseWidth)
+        
+        setHoveredEdge(null)
+      })
+      .on('click', function(event, d: any) {
+        event.stopPropagation()
+        
+        const clickingSameEdge = clickFrozenEdge && isSameEdge(clickFrozenEdge, d)
+        
+        if (clickingSameEdge) {
+          // Unfreeze - recalculate base state
+          const currentlySelected = selectedNode
+          const isConnected = !currentlySelected || (
+            (typeof d.source === 'object' ? d.source.id : d.source) === currentlySelected ||
+            (typeof d.target === 'object' ? d.target.id : d.target) === currentlySelected
+          )
+          const baseOpacity = currentlySelected && isConnected ? 0.8 : 0.5
+          const baseWidth = currentlySelected && isConnected ? Math.sqrt(d.value) * 1.2 : Math.sqrt(d.value)
           
           d3.select(this)
             .attr('stroke', '#999')
             .attr('stroke-opacity', baseOpacity)
             .attr('stroke-width', baseWidth)
           
-          setHoveredEdge(null)
-        }
-      })
-      .on('click', function(event, d: any) {
-        event.stopPropagation()
-        
-        // Only allow edge click if: no node selected OR edge connects to selected node
-        if (isEdgeConnected(d, selectedNode)) {
-          const clickingSameEdge = isSameEdge(selectedEdge, d)
-          
-          // Reset all edges first
-          link.each(function(linkData: any) {
-            const baseOpacity = selectedNode && isEdgeConnected(linkData, selectedNode) ? 0.8 : 0.5
-            const baseWidth = selectedNode && isEdgeConnected(linkData, selectedNode)
-              ? Math.sqrt(linkData.value) * 1.2
-              : Math.sqrt(linkData.value)
-            
-            d3.select(this)
-              .attr('stroke', '#999')
-              .attr('stroke-opacity', selectedNode && !isEdgeConnected(linkData, selectedNode) ? 0.05 : baseOpacity)
-              .attr('stroke-width', baseWidth)
-          })
-          
-          if (clickingSameEdge) {
-            // Unfreeze
-            setSelectedEdge(null)
-          } else {
-            // Freeze this edge
-            d3.select(this)
-              .attr('stroke', '#3b82f6')
-              .attr('stroke-opacity', 0.9)
-              .attr('stroke-width', Math.sqrt(d.value) * 1.5)
-            
-            setSelectedEdge(d)
+          setClickFrozenEdge(null)
+        } else {
+          // Reset previous frozen edge if exists
+          if (clickFrozenEdge) {
+            link.each(function(linkData: any) {
+              if (isSameEdge(linkData, clickFrozenEdge)) {
+                const currentlySelected = selectedNode
+                const isConnected = !currentlySelected || (
+                  (typeof linkData.source === 'object' ? linkData.source.id : linkData.source) === currentlySelected ||
+                  (typeof linkData.target === 'object' ? linkData.target.id : linkData.target) === currentlySelected
+                )
+                const baseOpacity = currentlySelected && isConnected ? 0.8 : 0.5
+                const baseWidth = currentlySelected && isConnected ? Math.sqrt(linkData.value) * 1.2 : Math.sqrt(linkData.value)
+                d3.select(this)
+                  .attr('stroke', '#999')
+                  .attr('stroke-opacity', baseOpacity)
+                  .attr('stroke-width', baseWidth)
+              }
+            })
           }
+          
+          // Freeze this edge
+          d3.select(this)
+            .attr('stroke', '#3b82f6')
+            .attr('stroke-opacity', 0.9)
+            .attr('stroke-width', Math.sqrt(d.value) * 1.5)
+          
+          setClickFrozenEdge(d)
         }
       })
+    
+    linkSelectionRef.current = link
 
     const node = g.append('g')
       .selectAll('circle')
@@ -198,49 +213,15 @@ export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: Embeddi
         
         const newSelected = selectedNode === d.id ? null : d.id
         setSelectedNode(newSelected)
-        setSelectedEdge(null)
+        setClickFrozenEdge(null)
         setHoveredEdge(null)
-        
-        if (newSelected) {
-          const connected = getConnectedNodes(newSelected)
-          
-          node
-            .transition().duration(200)
-            .attr('opacity', (n: any) => connected.has(n.id) ? 1 : 0.15)
-            .attr('fill', (n: any) => n.id === newSelected ? '#ef4444' : '#10b981')
-          
-          link
-            .transition().duration(200)
-            .attr('stroke', '#999')
-            .attr('stroke-opacity', (l: any) => isEdgeConnected(l, newSelected) ? 0.8 : 0.05)
-            .attr('stroke-width', (l: any) => {
-              return isEdgeConnected(l, newSelected) ? Math.sqrt(l.value) * 1.2 : Math.sqrt(l.value)
-            })
-          
-          labels
-            .transition().duration(200)
-            .attr('opacity', (n: any) => connected.has(n.id) ? 1 : 0.15)
-        } else {
-          node
-            .transition().duration(200)
-            .attr('opacity', 1)
-            .attr('fill', '#10b981')
-          link
-            .transition().duration(200)
-            .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.5)
-            .attr('stroke-width', (d: any) => Math.sqrt(d.value))
-          labels
-            .transition().duration(200)
-            .attr('opacity', 1)
-          
-          simulation.alpha(0.3).restart()
-        }
       })
       .call(d3.drag()
         .on('start', dragstarted)
         .on('drag', dragged)
         .on('end', dragended) as any)
+    
+    nodeSelectionRef.current = node
 
     const labels = g.append('g')
       .selectAll('text')
@@ -253,20 +234,16 @@ export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: Embeddi
       .attr('dy', 4)
       .attr('fill', '#fff')
       .style('pointer-events', 'none')
+    
+    labelSelectionRef.current = labels
 
     node.append('title')
       .text((d: any) => d.id)
 
     svg.on('click', () => {
       setSelectedNode(null)
-      setSelectedEdge(null)
+      setClickFrozenEdge(null)
       setHoveredEdge(null)
-      node.transition().duration(200).attr('opacity', 1).attr('fill', '#10b981')
-      link.transition().duration(200)
-        .attr('stroke', '#999')
-        .attr('stroke-opacity', 0.5)
-        .attr('stroke-width', (d: any) => Math.sqrt(d.value))
-      labels.transition().duration(200).attr('opacity', 1)
       simulation.alpha(0.3).restart()
     })
 
@@ -306,15 +283,65 @@ export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: Embeddi
     return () => {
       simulation.stop()
     }
-  }, [data, topN, selectedNode, selectedEdge])
+  }, [data, topN])
 
+  // Handle node selection changes
   useEffect(() => {
-    if (selectedNode === null && simulationRef.current) {
-      simulationRef.current.alpha(0.3).restart()
+    if (!nodeSelectionRef.current || !linkSelectionRef.current || !labelSelectionRef.current) return
+
+    const node = nodeSelectionRef.current
+    const link = linkSelectionRef.current
+    const labels = labelSelectionRef.current
+
+    if (selectedNode) {
+      // Build connected set
+      const connected = new Set([selectedNode])
+      link.each(function(l: any) {
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target
+        if (sourceId === selectedNode) connected.add(targetId)
+        if (targetId === selectedNode) connected.add(sourceId)
+      })
+
+      // Update nodes
+      node.each(function(n: any) {
+        d3.select(this)
+          .attr('opacity', connected.has(n.id) ? 1 : 0.15)
+          .attr('fill', n.id === selectedNode ? '#ef4444' : '#10b981')
+      })
+
+      // Update links - disable pointer events on unconnected edges
+      link.each(function(l: any) {
+        const sourceId = typeof l.source === 'object' ? l.source.id : l.source
+        const targetId = typeof l.target === 'object' ? l.target.id : l.target
+        const isConnected = sourceId === selectedNode || targetId === selectedNode
+
+        d3.select(this)
+          .attr('stroke-opacity', isConnected ? 0.8 : 0.05)
+          .attr('stroke-width', isConnected ? Math.sqrt(l.value) * 1.2 : Math.sqrt(l.value))
+          .style('pointer-events', isConnected ? 'auto' : 'none')
+      })
+
+      // Update labels
+      labels.each(function(n: any) {
+        d3.select(this).attr('opacity', connected.has(n.id) ? 1 : 0.15)
+      })
+    } else {
+      // Reset all
+      node.attr('opacity', 1).attr('fill', '#10b981')
+      link
+        .attr('stroke-opacity', 0.5)
+        .attr('stroke-width', (d: any) => Math.sqrt(d.value))
+        .style('pointer-events', 'auto')
+      labels.attr('opacity', 1)
+
+      if (simulationRef.current) {
+        simulationRef.current.alpha(0.3).restart()
+      }
     }
   }, [selectedNode])
 
-  const displayEdge = selectedEdge || hoveredEdge
+  const displayEdge = clickFrozenEdge || hoveredEdge
 
   return (
     <div style={{ position: 'relative' }}>
@@ -353,9 +380,9 @@ export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: Embeddi
       )}
       
       <div style={{ marginTop: 12, fontSize: 13, color: '#666', textAlign: 'center' }}>
-        Click node to focus • Click edge to freeze details • Drag nodes • Scroll to zoom
+        Click node to focus • Click edge to freeze • Hover edge for details • Drag nodes • Scroll to zoom
         {selectedNode && <span style={{ marginLeft: 12, color: '#ef4444', fontWeight: 600 }}>Selected: {selectedNode}</span>}
-        {selectedEdge && <span style={{ marginLeft: 12, color: '#3b82f6', fontWeight: 600 }}>Edge Frozen</span>}
+        {clickFrozenEdge && <span style={{ marginLeft: 12, color: '#3b82f6', fontWeight: 600 }}>Edge Frozen</span>}
       </div>
     </div>
   )

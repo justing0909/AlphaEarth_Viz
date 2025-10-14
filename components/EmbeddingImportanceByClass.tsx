@@ -106,7 +106,7 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
   },[chartDataFull, topEmbeddings, visibleCount])
   const positions = Array.from({ length: topEmbeddings.length }).map((_,i)=>i)
 
-  const darkRed = '#8B0000'
+  const darkRed = '#bb0303ff'
   const lightGray = '#e0e0e0'
 
   const compactMode = chartDataFull.length > 0 && visibleCount < chartDataFull.length
