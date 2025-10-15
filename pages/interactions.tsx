@@ -30,7 +30,7 @@ export default function Interactions(){
         </table>
       </div>
       <div style={{marginTop:12}}>
-        <a href="/api/interactions?download=1">Download CSV</a>
+        <a href="/api/interactions?download=1" download> Download CSV </a>
       </div>
     </Layout>
   )
