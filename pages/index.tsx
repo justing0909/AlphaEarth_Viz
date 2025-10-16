@@ -103,7 +103,7 @@ export default function Home(){
               color: theme.textPrimary,
               letterSpacing: '-1.5px',
               transition: 'color 0.3s ease'
-            }}>TEST TEST TEST What on Earth is AlphaEarth?</h1>
+            }}>What on Earth is AlphaEarth?</h1>
             <div style={{
               width: 60,
               height: 3,
