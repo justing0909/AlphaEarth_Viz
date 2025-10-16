@@ -11,7 +11,7 @@ const ModelAccuracyChart = dynamic(() => import('@/components/ModelAccuracyChart
 export default function Home(){
   const { data: metrics } = useFetch<any[]>('metrics','/api/metrics?source=interactions')
   const { data: experiments } = useFetch<any[]>('experiments','/api/experiments')
-  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=25000')
+  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=100000')
   const { darkMode, toggleDarkMode } = useDarkMode()
   
   const metricsArray = Array.isArray(metrics) ? metrics : []
