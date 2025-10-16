@@ -11,7 +11,7 @@ const ModelAccuracyChart = dynamic(() => import('@/components/ModelAccuracyChart
 export default function Home(){
   const { data: metrics } = useFetch<any[]>('metrics','/api/metrics?source=interactions')
   const { data: experiments } = useFetch<any[]>('experiments','/api/experiments')
-  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions')
+  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=25000')
   const { darkMode, toggleDarkMode } = useDarkMode()
   
   const metricsArray = Array.isArray(metrics) ? metrics : []
@@ -103,7 +103,7 @@ export default function Home(){
               color: theme.textPrimary,
               letterSpacing: '-1.5px',
               transition: 'color 0.3s ease'
-            }}>What on Earth is AlphaEarth?</h1>
+            }}>AlphaEarth</h1>
             <div style={{
               width: 60,
               height: 3,
@@ -118,7 +118,7 @@ export default function Home(){
               fontWeight: 400,
               letterSpacing: '0.3px',
               transition: 'color 0.3s ease'
-            }}>Our preliminary findings</p>
+            }}>Geospatial ML Experiment Dashboard</p>
           </div>
           
           <div style={{ display: 'grid', gap: 20, paddingBottom: 40 }}>
@@ -202,7 +202,7 @@ export default function Home(){
                   textAlign: 'right',
                   transition: 'all 0.3s ease'
                 }}>
-                  Showing {Math.min(10, parsedRows.length)} of {parsedRows.length} experiments
+                  Showing {Math.min(10, parsedRows.length)} of {parsedRows.length}+ experiments
                 </div>
               </div>
 

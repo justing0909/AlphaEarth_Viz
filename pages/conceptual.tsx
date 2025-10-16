@@ -12,7 +12,7 @@ const ClassPerformanceMatrix = dynamic(() => import('@/components/ClassPerforman
 type ViewType = 'grouped' | 'class-network' | 'embedding-network' | 'performance'
 
 export default function Conceptual(){
-  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=500')
+  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=25000')
   const [activeView, setActiveView] = useState<ViewType>('performance')
   const { darkMode } = useDarkMode()
   
