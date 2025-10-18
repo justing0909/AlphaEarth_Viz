@@ -1,5 +1,0 @@
-experiment_id,class_label,metric_name,metric_value
-exp_001,flood,recall,0.78
-exp_001,wildfire,recall,0.74
-exp_002,flood,recall,0.83
-exp_002,wildfire,recall,0.79

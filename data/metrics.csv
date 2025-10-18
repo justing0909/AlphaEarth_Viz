@@ -1,5 +1,0 @@
-experiment_id,metric_name,metric_value
-exp_001,accuracy,0.86
-exp_001,f1_macro,0.81
-exp_002,accuracy,0.89
-exp_002,f1_macro,0.85

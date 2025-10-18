@@ -7,7 +7,7 @@ import { useDarkMode } from '@/lib/useDarkMode'
 const LeafletMap = dynamic(()=>import('@/components/LeafletMap'), { ssr:false })
 
 export default function Geo(){
-  const { data: importance } = useFetch<any[]>('importance','/api/importance')
+  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=25000')
   const { darkMode } = useDarkMode()
   
   const theme = {
@@ -18,34 +18,49 @@ export default function Geo(){
     border: darkMode ? '#333' : '#dadce0'
   }
   
-  // Convert simple tiles to a toy GeoJSON polygon collection for demo
+  // Convert parsed rows to GeoJSON using actual bounding boxes
   const geo = useMemo(()=>{
-    if(!importance) return null
-    const tiles = {
-      tile_a: [[42.39,-71.08],[42.34,-71.02]],
-      tile_b: [[42.38,-71.10],[42.35,-71.05]],
-      tile_c: [[42.37,-71.12],[42.33,-71.08]],
-      tile_d: [[42.40,-71.06],[42.36,-71.00]],
-    } as Record<string, [[number,number],[number,number]]>
-    const byTile: Record<string, number> = {}
-    importance.forEach(row=>{
-      byTile[row.region_id] = (byTile[row.region_id]||0) + (row.importance_score||0)
-    })
-    const fc = {
-      type:'FeatureCollection',
-      features: Object.entries(tiles).map(([id,[[nlat,nlng],[slat,slng]]])=> ({
-        type:'Feature',
-        properties:{ id, importance: byTile[id]||0 },
-        geometry:{
-          type:'Polygon',
-          coordinates:[[
-            [nlng,nlat],[nlng,slat],[slng,slat],[slng,nlat],[nlng,nlat]
-          ]]
+    const parsedRows = (interactions as any)?.parsedRows || []
+    if (parsedRows.length === 0) return null
+    
+    const features = parsedRows
+      .filter((row: any) => row.bbox && row.bbox.length === 4)
+      .map((row: any, idx: number) => {
+        const [minLon, minLat, maxLon, maxLat] = row.bbox
+        
+        // Calculate average accuracy as importance metric
+        const importance = row.metrics?.accuracy || 0
+        
+        return {
+          type: 'Feature',
+          properties: { 
+            id: row.id || `bbox_${idx}`,
+            importance: importance,
+            country: row.country,
+            classes: `${row.classes?.c1Name || '?'} vs ${row.classes?.c2Name || '?'}`,
+            accuracy: importance,
+            samples: row.samples
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[
+              [minLon, minLat],
+              [minLon, maxLat],
+              [maxLon, maxLat],
+              [maxLon, minLat],
+              [minLon, minLat]
+            ]]
+          }
         }
-      }))
+      })
+    
+    return {
+      type: 'FeatureCollection',
+      features: features
     }
-    return fc
-  },[importance])
+  }, [interactions])
+
+  const parsedRows = (interactions as any)?.parsedRows || []
 
   return (
     <Layout darkMode={darkMode}>
@@ -65,14 +80,14 @@ export default function Geo(){
           marginBottom: 8,
           letterSpacing: '-0.5px',
           transition: 'color 0.3s ease'
-        }}>Geographic Distribution</h1>
+        }}>Bounding Box Distribution</h1>
         <p style={{ 
           textAlign: 'center',
           color: theme.textSecondary,
           fontSize: 15,
           marginBottom: 32,
           transition: 'color 0.3s ease'
-        }}>Bounding box importance with Esri World Imagery</p>
+        }}>Experiment regions colored by accuracy • {parsedRows.length.toLocaleString()} experiments loaded</p>
         
         <div style={{ 
           background: theme.cardBg,

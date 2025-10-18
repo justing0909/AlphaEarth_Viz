@@ -1,9 +1,0 @@
-experiment_id,embedding_name,class_label,region_id,importance_score,importance_method
-exp_001,alphaearth_v1,flood,tile_a,0.5,shap
-exp_001,alphaearth_v1,flood,tile_b,0.961,shap
-exp_001,alphaearth_v1,wildfire,tile_c,0.786,shap
-exp_001,alphaearth_v1,wildfire,tile_d,0.679,shap
-exp_002,alphaearth_v1.1,flood,tile_a,0.325,shap
-exp_002,alphaearth_v1.1,flood,tile_b,0.325,shap
-exp_002,alphaearth_v1.1,wildfire,tile_c,0.246,shap
-exp_002,alphaearth_v1.1,wildfire,tile_d,0.893,shap
