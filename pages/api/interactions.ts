@@ -59,5 +59,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   console.log(`Interactions API: Successfully parsed ${parsedRows.length} rows`)
-  res.status(200).json({ parsedRows })
+  res.status(200).json({
+    parsedRows,
+    totalProcessed: parsedRows.length,
+    totalAvailable: lines.length
+  })
 }

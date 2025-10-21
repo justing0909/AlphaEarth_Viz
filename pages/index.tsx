@@ -9,11 +9,18 @@ const CountryMap = dynamic(() => import('@/components/CountryMap'), { ssr: false
 const ModelAccuracyChart = dynamic(() => import('@/components/ModelAccuracyChart'), { ssr: false })
 
 export default function Home(){
-  const { data: metrics } = useFetch<any[]>('metrics','/api/metrics?source=interactions')
-  const { data: experiments } = useFetch<any[]>('experiments','/api/experiments')
-  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=100000')
+  const { data: metrics, isLoading: metricsLoading, error: metricsError } = useFetch<any[]>('metrics','/api/metrics?source=interactions')
+  const { data: experiments, isLoading: experimentsLoading, error: experimentsError } = useFetch<any[]>('experiments','/api/experiments')
+  const { data: interactions, isLoading: interactionsLoading, error: interactionsError } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=100000')
+  
+  //* TENT DEBUGGING
+  console.log('Loading states:', { metricsLoading, experimentsLoading, interactionsLoading })
+  console.log('Errors:', { metricsError, experimentsError, interactionsError })
+  
   const { darkMode, toggleDarkMode } = useDarkMode()
   
+  
+  const isLoading = metricsLoading || experimentsLoading || interactionsLoading
   const metricsArray = Array.isArray(metrics) ? metrics : []
   const allParsedRows = (interactions as any)?.parsedRows || []
   
@@ -42,13 +49,54 @@ export default function Home(){
     tableBorder: darkMode ? '#2a2a2a' : '#f1f3f4',
     accent: '#1967d2'
   }
+
+  const LoadingOverlay = () => (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0,0,0,0.95)',
+      backdropFilter: 'blur(4px)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999,
+      gap: 16
+    }}>
+      <div style={{
+        fontSize: 18,
+        fontWeight: 500,
+        color: '#e8e8e8'
+      }}>
+        Loading Data
+      </div>
+      <div style={{
+        fontSize: 14,
+        color: '#e8e8e8',
+        textAlign: 'center',
+        maxWidth: 400
+      }}>
+        {interactionsLoading 
+    ? `Processing experiments...`
+    : metricsLoading 
+    ? `Loading metrics...`
+    : `Almost ready...`}
+      </div>
+    </div>
+  )
   
   return (
     <Layout darkMode={darkMode}>
+      {isLoading && <LoadingOverlay />}
       <div style={{ 
         background: theme.bg,
         minHeight: '100vh',
-        transition: 'background 0.3s ease'
+        transition: 'background 0.3s ease',
+        pointerEvents: isLoading ? 'none' : 'auto',
+        opacity: isLoading ? 0.5 : 1
       }}>
         <div style={{ 
           maxWidth: 1600, 
