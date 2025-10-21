@@ -5,7 +5,7 @@ import Papa from 'papaparse'
 import { parseAlphaEarthRow } from '../../lib/ingest'
 
 const CANDIDATES = [
-  'alphaearth_user_interactions.csv'
+  'AlphaEarth_experiments_full_data.csv'
 ]
 
 function findInteractionsFile(): { fullPath: string; name: string } | null {

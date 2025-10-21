@@ -4,7 +4,7 @@ import path from 'path'
 import Papa from 'papaparse'
 
 const INTERACTION_CANDIDATES = [
-  'alphaearth_user_interactions.csv'
+  'AlphaEarth_experiments_full_data.csv',
 ]
 
 function findInteractions() {
