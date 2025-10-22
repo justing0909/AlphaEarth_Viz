@@ -57,8 +57,8 @@ export default function Home(){
       left: 0,
       right: 0,
       bottom: 0,
-      background: 'rgba(0,0,0,0.95)',
-      backdropFilter: 'blur(4px)',
+      background: 'rgba(0,0,0,0.85)',
+      backdropFilter: 'blur(5px)',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
@@ -151,7 +151,7 @@ export default function Home(){
               color: theme.textPrimary,
               letterSpacing: '-1.5px',
               transition: 'color 0.3s ease'
-            }}>AlphaEarth</h1>
+            }}>What on Earth is AlphaEarth?</h1>
             <div style={{
               width: 60,
               height: 3,
@@ -166,7 +166,7 @@ export default function Home(){
               fontWeight: 400,
               letterSpacing: '0.3px',
               transition: 'color 0.3s ease'
-            }}>Geospatial ML Experiment Dashboard</p>
+            }}>Our findings so far...</p>
           </div>
           
           <div style={{ display: 'grid', gap: 20, paddingBottom: 40 }}>
