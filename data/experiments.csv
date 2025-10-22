@@ -1,3 +1,0 @@
-experiment_id,ts,model_name,embedding_name,dataset_name,task_type,params_json,notes
-exp_001,2025-09-25 10:00:00,xgb_cls,alphaearth_v1,boston_v1,classification,"{""max_depth"":4}",baseline
-exp_002,2025-10-05 14:30:00,xgb_cls,alphaearth_v1.1,boston_v1,classification,"{""max_depth"":6}",tuned
