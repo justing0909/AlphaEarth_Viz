@@ -97,6 +97,10 @@ IMPORTANT:
 - Use context from previous comparison if user refers to it
 - If you cannot determine something with confidence, use null`
 
+    console.log('=== GROQ API REQUEST ===')
+    console.log('API Key exists:', !!process.env.GROQ_API_KEY)
+    console.log('API Key prefix:', process.env.GROQ_API_KEY?.substring(0, 10))
+
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -104,7 +108,7 @@ IMPORTANT:
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'llama-3.2-3b-preview', // Fast and free
+        model: 'llama-3.2-3b-preview',
         messages: [
           {
             role: 'system',
@@ -120,14 +124,21 @@ IMPORTANT:
       })
     })
 
+    console.log('Groq response status:', response.status)
+    console.log('Groq response headers:', Object.fromEntries(response.headers.entries()))
+
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('Groq API error:', errorText)
-      throw new Error(`Groq API failed: ${response.status}`)
+      console.error('=== GROQ API ERROR ===')
+      console.error('Status:', response.status)
+      console.error('Error body:', errorText)
+      throw new Error(`Groq API failed: ${response.status} - ${errorText}`)
     }
 
     const data = await response.json()
-    console.log('Groq raw response:', data.choices[0].message.content)
+    console.log('=== GROQ API SUCCESS ===')
+    console.log('Full response:', JSON.stringify(data, null, 2))
+    console.log('Raw content:', data.choices[0].message.content)
     
     const extracted = JSON.parse(data.choices[0].message.content)
     console.log('Parsed extraction:', extracted)
@@ -139,7 +150,10 @@ IMPORTANT:
       needsConfirmation: true
     }
   } catch (error) {
-    console.error('Groq extraction error:', error)
+    console.error('=== GROQ EXTRACTION ERROR ===')
+    console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error)
+    console.error('Error message:', error instanceof Error ? error.message : String(error))
+    console.error('Full error:', error)
     return { 
       class1: null, 
       class2: null, 
@@ -148,101 +162,4 @@ IMPORTANT:
       responseMessage: "I'm having trouble processing that. Could you try rephrasing?"
     }
   }
-}
-
-// Check if message is affirmative
-function isAffirmative(message: string): boolean {
-  const lower = message.toLowerCase().trim()
-  const affirmatives = ['yes', 'yeah', 'yep', 'correct', 'right', 'sure', 'okay', 'ok', 'yup', 'affirmative', 'that\'s right', 'exactly', 'sounds good', 'perfect', 'great']
-  return affirmatives.some(word => 
-    lower === word || 
-    lower.startsWith(word + ' ') || 
-    lower.endsWith(' ' + word) ||
-    lower.startsWith(word + ',') ||
-    lower.startsWith(word + '!')
-  )
-}
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-
-  const { message, pendingComparison, lastConfirmedComparison } = req.body
-
-  console.log('Received message:', message)
-  console.log('Pending comparison:', pendingComparison)
-  console.log('Last confirmed:', lastConfirmedComparison)
-
-  // Only treat as confirmation if pending exists AND doesn't have bbox yet
-  const isAwaitingConfirmation = pendingComparison && !pendingComparison.bbox
-
-  // If there's a pending comparison (awaiting confirmation), check response
-  if (isAwaitingConfirmation) {
-    console.log('In confirmation mode')
-    if (isAffirmative(message)) {
-      console.log('User confirmed, geocoding:', pendingComparison.location)
-      const bbox = await geocodeLocation(pendingComparison.location)
-      
-      console.log('Geocoding result:', bbox)
-      
-      if (!bbox) {
-        return res.status(200).json({
-          message: `I couldn't find the location "${pendingComparison.location}". Could you try a different location name?`,
-          pendingComparison: null
-        })
-      }
-
-      console.log('Returning confirmed bbox for', pendingComparison.location)
-      
-      return res.status(200).json({
-        message: `Great! Here's the bounding box for ${pendingComparison.location}. The classification will compare ${pendingComparison.class1} vs ${pendingComparison.class2}.`,
-        confirmed: true,
-        pendingComparison: pendingComparison,
-        bbox: bbox
-      })
-    } else {
-      // Not affirmative - treat as new query instead of rejection
-      console.log('User response was not affirmative, treating as new query with context')
-      // Fall through to extraction below (don't return here)
-    }
-  }
-
-  // Extract entities (LLM handles all context resolution)
-  const result = await processQuery(message, lastConfirmedComparison)
-  
-  console.log('processQuery result:', result)
-  
-  if (result.responseMessage) {
-    return res.status(200).json({
-      message: result.responseMessage
-    })
-  }
-
-  if (!result.class1 || !result.class2 || !result.location) {
-    return res.status(200).json({
-      message: "I couldn't quite understand that. Could you specify two land cover types and a location? For example: 'Show me mangroves vs water in the Florida Keys'\n\nValid classes: " + VALID_CLASSES.join(', ')
-    })
-  }
-
-  // Validate classes are in our valid list
-  if (!VALID_CLASSES.includes(result.class1) || !VALID_CLASSES.includes(result.class2)) {
-    const invalid = []
-    if (!VALID_CLASSES.includes(result.class1)) invalid.push(result.class1)
-    if (!VALID_CLASSES.includes(result.class2)) invalid.push(result.class2)
-    
-    return res.status(200).json({
-      message: `I extracted these classes but they don't match our valid types: ${invalid.join(', ')}. Valid classes are: ${VALID_CLASSES.join(', ')}`
-    })
-  }
-
-  // Ask for confirmation
-  return res.status(200).json({
-    message: `Okay! Just to make sure, you would like to run a pairwise comparison classification of ${result.class1} versus ${result.class2} in the region of ${result.location}, correct?`,
-    pendingComparison: {
-      class1: result.class1,
-      class2: result.class2,
-      location: result.location
-    }
-  })
 }
