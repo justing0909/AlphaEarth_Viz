@@ -163,3 +163,17 @@ IMPORTANT:
     }
   }
 }
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Add health check for debugging
+  if (req.method === 'GET') {
+    return res.status(200).json({ 
+      status: 'ok',
+      hasGroqKey: !!process.env.GROQ_API_KEY,
+      keyPrefix: process.env.GROQ_API_KEY?.substring(0, 7) || 'missing'
+    })
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+}
