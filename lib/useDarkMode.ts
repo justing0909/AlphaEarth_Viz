@@ -1,33 +1,37 @@
 import { useState, useEffect } from 'react'
 
 export function useDarkMode() {
-  // Initialize from window immediately if available
-  const [darkMode, setDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return (window as any).__darkMode === true || (window as any).__darkMode === 'true'
-    }
-    return false
-  })
+  const [darkMode, setDarkMode] = useState(true)
 
   useEffect(() => {
-    // Listen for changes from other tabs/components
-    const checkDarkMode = () => {
-      const stored = (window as any).__darkMode
-      if (stored !== undefined) {
-        const newValue = stored === 'true' || stored === true
-        setDarkMode(newValue)
+    // Check for saved preference first
+    const saved = localStorage.getItem('darkMode')
+    if (saved !== null) {
+      setDarkMode(saved === 'true')
+      return
+    }
+
+    // Otherwise use system preference
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    setDarkMode(mediaQuery.matches)
+
+    // Listen for system theme changes (only if no saved preference)
+    const handler = (e: MediaQueryListEvent) => {
+      if (localStorage.getItem('darkMode') === null) {
+        setDarkMode(e.matches)
       }
     }
-    
-    // Check periodically in case changed on another page
-    const interval = setInterval(checkDarkMode, 100)
-    return () => clearInterval(interval)
+    mediaQuery.addEventListener('change', handler)
+
+    return () => mediaQuery.removeEventListener('change', handler)
   }, [])
 
   const toggleDarkMode = () => {
-    const newValue = !darkMode
-    setDarkMode(newValue)
-    ;(window as any).__darkMode = newValue
+    setDarkMode(prev => {
+      const newValue = !prev
+      localStorage.setItem('darkMode', String(newValue))
+      return newValue
+    })
   }
 
   return { darkMode, toggleDarkMode }

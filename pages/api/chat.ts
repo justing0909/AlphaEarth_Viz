@@ -41,7 +41,7 @@ async function geocodeLocation(location: string): Promise<[number, number, numbe
   }
 }
 
-// Call Ollama with full context and let it handle everything
+// Call Groq API instead of Ollama
 async function processQuery(
   message: string,
   lastConfirmed?: { class1: string, class2: string, location: string } | null
@@ -97,23 +97,39 @@ IMPORTANT:
 - Use context from previous comparison if user refers to it
 - If you cannot determine something with confidence, use null`
 
-    const response = await fetch('http://localhost:11434/api/generate', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
-        model: 'llama3.2',
-        prompt: prompt,
-        stream: false,
-        options: {
-          temperature: 0.1 // Lower temperature for more consistent extraction
-        }
+        model: 'llama-3.2-3b-preview', // Fast and free
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful assistant that extracts structured data from natural language queries. Always respond with valid JSON only.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 200
       })
     })
 
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Groq API error:', errorText)
+      throw new Error(`Groq API failed: ${response.status}`)
+    }
+
     const data = await response.json()
-    console.log('LLM raw response:', data.response)
+    console.log('Groq raw response:', data.choices[0].message.content)
     
-    const extracted = JSON.parse(data.response)
+    const extracted = JSON.parse(data.choices[0].message.content)
     console.log('Parsed extraction:', extracted)
     
     return {
@@ -123,7 +139,7 @@ IMPORTANT:
       needsConfirmation: true
     }
   } catch (error) {
-    console.error('Ollama extraction error:', error)
+    console.error('Groq extraction error:', error)
     return { 
       class1: null, 
       class2: null, 
