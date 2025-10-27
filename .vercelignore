@@ -1,0 +1,17 @@
+data/AlphaEarth_experiments_full_data.csv
+data/alphaearth_user_interactions.csv
+data/prod_alphaearth_user_interactions.csv
+data/*.csv
+```
+
+This tells Vercel to ignore these files during deployment. Your production app only needs `statistics.json` (which gets downloaded via the prebuild script), not the original CSV files.
+
+**Also check your `.gitignore`:**
+
+Make sure these CSVs aren't being tracked by git either:
+```
+# Add to .gitignore if not already there
+data/*.csv
+data/AlphaEarth_experiments_full_data.csv
+data/alphaearth_user_interactions.csv
+data/prod_alphaearth_user_interactions.csv
