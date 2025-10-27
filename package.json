@@ -3,13 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "predev": "python compute_statistics.py",
     "dev": "next dev",
-    "prebuild": "python3 compute_statistics.py",
     "build": "next build",
     "start": "next start",
-    "compute-stats": "python compute_statistics.py",
-    "compute-stats-watch": "nodemon --watch data/*.csv, --exec python compute_statistics.py",
     "lint": "next lint"
   },
   "dependencies": {
