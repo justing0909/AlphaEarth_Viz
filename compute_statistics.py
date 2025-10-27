@@ -536,7 +536,7 @@ def compute_statistics():
         .sort(['grid_lat', 'grid_lon'])
     )
     
-    print(f"Created grid with {len(heatmap_grid)} cells at {GRID_RESOLUTION}° resolution")
+    print(f"Created grid with {len(heatmap_grid)} cells at {GRID_RESOLUTION}-degree resolution")
     
     heatmap_by_metric = {
         'accuracy': heatmap_grid.select(['grid_lon', 'grid_lat', 'avg_accuracy', 'sample_count']).to_dicts(),
@@ -610,17 +610,17 @@ def compute_statistics():
     with open(output_path, 'w') as f:
         json.dump(statistics, f, indent=2)
     
-    print(f"\n✅ Statistics written to {output_path}")
+    print(f"\n[OK] Statistics written to {output_path}")
     print(f"File size: {output_path.stat().st_size / (1024*1024):.2f} MB")
     print("=" * 70)
-    print("🎉 STATISTICS GENERATION COMPLETE!")
+    print("STATISTICS GENERATION COMPLETE!")
     print("=" * 70)
 
 if __name__ == '__main__':
     try:
         compute_statistics()
     except Exception as e:
-        print(f"\n❌ ERROR: {e}")
+        print(f"\n ERROR: {e}")
         import traceback
         traceback.print_exc()
         exit(1)
