@@ -5,7 +5,7 @@
   "scripts": {
     "predev": "python compute_statistics.py",
     "dev": "next dev",
-    "prebuild": "python compute_statistics.py",
+    "prebuild": "python3 compute_statistics.py",
     "build": "next build",
     "start": "next start",
     "compute-stats": "python compute_statistics.py",
