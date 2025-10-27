@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev",
-    "prebuild": "mkdir -p data && curl -L -o data/statistics.json https://github.com/justing0909/AlphaEarth_Viz/releases/tag/v1.0.0",
+    "prebuild": "mkdir -p data && curl -L -o data/statistics.json 'https://www.dropbox.com/scl/fi/qy3z2m12y47zph9xuajkt/statistics.json?rlkey=qtc3vvfrbqoorc6hgiogvtl7f&st=21uxjr8o&dl=1'",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

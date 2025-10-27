@@ -32,3 +32,4 @@ logs
 coverage/
 .cache/
 data/statistics.json
+*.sh
