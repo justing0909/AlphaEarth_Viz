@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import * as d3 from 'd3'
+import type { ClassCooccurrence } from '@/lib/types'
 
 interface ClassDemandNetworkProps {
-  data: any[]
+  data: ClassCooccurrence[]
 }
 
 export default function ClassDemandNetwork({ data }: ClassDemandNetworkProps) {
@@ -18,30 +19,24 @@ export default function ClassDemandNetwork({ data }: ClassDemandNetworkProps) {
   useEffect(() => {
     if (!data || data.length === 0 || !svgRef.current) return
 
-    const classPairCounts: Record<string, number> = {}
     const allClasses = new Set<string>()
-
-    data.forEach(row => {
-      if (!row.classes) return
-      
-      const c1 = row.classes.c1Name
-      const c2 = row.classes.c2Name
-      
-      allClasses.add(c1)
-      allClasses.add(c2)
-      
-      const pairKey = [c1, c2].sort().join('|||')
-      classPairCounts[pairKey] = (classPairCounts[pairKey] || 0) + 1
-    })
-
-    const nodes = Array.from(allClasses).map(cls => ({ id: cls, label: cls }))
     const links: any[] = []
-    Object.entries(classPairCounts).forEach(([pairKey, count]) => {
-      const [c1, c2] = pairKey.split('|||')
-      if (c1 !== c2) {
-        links.push({ source: c1, target: c2, value: count })
+
+    data.forEach(item => {
+      allClasses.add(item.name_class1)
+      allClasses.add(item.name_class2)
+      
+      if (item.name_class1 !== item.name_class2) {
+        links.push({
+          source: item.name_class1,
+          target: item.name_class2,
+          value: item.count
+        })
       }
     })
+
+    // Build nodes
+    const nodes = Array.from(allClasses).map(cls => ({ id: cls, label: cls }))
 
     const svg = d3.select(svgRef.current)
     svg.selectAll('*').remove()

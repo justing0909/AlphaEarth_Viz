@@ -1,17 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import type { CountryDistribution } from '@/lib/types'
 
-interface MetricData {
-  experiment_id: string
-  metric_name: string
-  metric_value: number | null
-  country: string
-  model: string
-}
-
-interface CountryMapD3Props {
-  data: MetricData[]
+interface CountryMapProps {
+  data: CountryDistribution[]
 }
 
 const COUNTRY_ISO: Record<string, string> = {
@@ -27,10 +20,31 @@ const COUNTRY_ISO: Record<string, string> = {
   'United States': 'USA',
   'Armenia': 'ARM',
   'United Kingdom': 'GBR',
+  'UK': 'GBR',
+  'Great Britain': 'GBR',
   'India': 'IND',
   'Bangladesh': 'BGD',
   'Indonesia': 'IDN',
   'Turkey': 'TUR',
+  'China': 'CHN',
+  'Morocco': 'MAR',
+  'Guatemala': 'GTM',
+  'Costa Rica': 'CRI',
+  'Italy': 'ITA',
+  'Nigeria': 'NGA',
+  'Australia': 'AUS',
+  'Afghanistan': 'AFG',
+  'Thailand': 'THA',
+  'Serbia': 'SRB',
+  'Spain': 'ESP',
+  'Germany': 'DEU',
+  'Bosnia and Herzegovina': 'BIH',
+  'Philippines': 'PHL',
+  'Russia': 'RUS',
+  'Egypt': 'EGY',
+  'Vietnam': 'VNM',
+  'Iraq': 'IRQ',
+  'Algeria': 'DZA'
 }
 
 const COUNTRY_COORDS: Record<string, [number, number]> = {
@@ -50,9 +64,28 @@ const COUNTRY_COORDS: Record<string, [number, number]> = {
   'Bangladesh': [23.685, 90.3563],
   'Indonesia': [-0.7893, 113.9213],
   'Turkey': [38.9637, 35.2433],
+  'China': [35.8617, 104.1954],
+  'Morocco': [31.7917, -7.0926],
+  'Guatemala': [15.7835, -90.2308],
+  'Costa Rica': [9.7489, -83.7534],
+  'Italy': [41.8719, 12.5674],
+  'Nigeria': [9.0820, 8.6753],
+  'Australia': [-25.2744, 133.7751],
+  'Afghanistan': [33.9391, 67.7100],
+  'Thailand': [15.8700, 100.9925],
+  'Serbia': [44.0165, 21.0059],
+  'Spain': [40.4637, -3.7492],
+  'Germany': [51.1657, 10.4515],
+  'Bosnia and Herzegovina': [43.9159, 17.6791],
+  'Philippines': [12.8797, 121.7740],
+  'Russia': [61.5240, 105.3188],
+  'Egypt': [26.8206, 30.8025],
+  'Vietnam': [14.0583, 108.2772],
+  'Iraq': [33.2232, 43.6793],
+  'Algeria': [28.0339, 1.6596]
 }
 
-export default function CountryMapD3({ data }: CountryMapD3Props) {
+export default function CountryMap({ data }: CountryMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<L.Map | null>(null)
   const [geoJsonData, setGeoJsonData] = useState<any>(null)
@@ -98,46 +131,71 @@ export default function CountryMapD3({ data }: CountryMapD3Props) {
 
     const map = mapInstance.current
 
+    // Clear existing layers
     map.eachLayer((layer) => {
       if ((layer as any).feature || layer instanceof L.CircleMarker) {
         map.removeLayer(layer)
       }
     })
 
-    const countryData: Record<string, { 
-      count: number
-      avgAccuracy: number
-      accuracySum: number
-      accuracyCount: number 
-    }> = {}
+    console.log('=== CountryMap Debug ===')
+    console.log('Received data:', data)
+    console.log('Data length:', data.length)
 
-    data.forEach(row => {
-      if (row.metric_name === 'accuracy' && row.metric_value !== null && row.country) {
-        const country = row.country.trim()
-        if (!countryData[country]) {
-          countryData[country] = { count: 0, avgAccuracy: 0, accuracySum: 0, accuracyCount: 0 }
-        }
-        countryData[country].count++
-        countryData[country].accuracySum += row.metric_value
-        countryData[country].accuracyCount++
-      }
+    // Create a map for easy lookup
+    const countryDataMap: Record<string, CountryDistribution> = {}
+    data.forEach(item => {
+      countryDataMap[item.country] = item
     })
 
-    Object.keys(countryData).forEach(country => {
-      countryData[country].avgAccuracy = countryData[country].accuracySum / countryData[country].accuracyCount
-    })
+    console.log('Country data map keys:', Object.keys(countryDataMap))
+    console.log('Country data map:', countryDataMap)
 
-    const maxCount = Math.max(...Object.entries(countryData)
-      .filter(([country]) => country !== 'Armenia')
-      .map(([_, stats]) => stats.count), 1)
+    const maxCount = Math.max(...data
+      .filter(item => item.country !== 'Armenia')
+      .map(item => item.experiment_count), 1)
+
+    console.log('Max count (excluding Armenia):', maxCount)
 
     if (geoJsonData && geoJsonData !== 'failed') {
-      const isoDataMap: Record<string, any> = {}
-      Object.entries(countryData).forEach(([country, stats]) => {
+      // Build ISO mapping
+      const isoDataMap: Record<string, CountryDistribution> = {}
+      Object.entries(countryDataMap).forEach(([country, countryStats]) => {
         const iso = COUNTRY_ISO[country]
         if (iso) {
-          isoDataMap[iso] = { country, ...stats }
+          isoDataMap[iso] = countryStats
+        } else {
+          console.warn(`⚠️ No ISO code for country: ${country}`)
         }
+      })
+
+      console.log('ISO data map keys:', Object.keys(isoDataMap))
+      console.log('ISO data map:', isoDataMap)
+      
+      // DEBUG: Check if UK data exists
+      console.log('=== UK Debug ===')
+      console.log('UK in countryDataMap?', countryDataMap['United Kingdom'])
+      console.log('GBR in isoDataMap?', isoDataMap['GBR'])
+      
+      // DEBUG: Check what GeoJSON has for UK
+      const ukFeature = geoJsonData.features.find((f: any) => 
+        f.properties.ISO_A3 === 'GBR' || 
+        f.properties.NAME === 'United Kingdom' ||
+        f.properties.ADMIN === 'United Kingdom'
+      )
+      console.log('UK GeoJSON feature:', ukFeature?.properties)
+      
+      // DEBUG: Check what GeoJSON has for USA
+      const usaFeature = geoJsonData.features.find((f: any) => 
+        f.properties.ISO_A3 === 'USA' || 
+        f.properties.NAME === 'United States'
+      )
+      console.log('USA GeoJSON feature:', usaFeature?.properties)
+      
+      // DEBUG: Show a few random GeoJSON features to understand structure
+      console.log('Sample GeoJSON features (first 5):')
+      geoJsonData.features.slice(0, 5).forEach((f: any) => {
+        console.log(`  ${f.properties.NAME || f.properties.ADMIN}: ISO_A3=${f.properties.ISO_A3}`)
       })
 
       L.geoJSON(geoJsonData, {
@@ -155,12 +213,11 @@ export default function CountryMapD3({ data }: CountryMapD3Props) {
             }
           }
 
-          const { country, count, avgAccuracy } = countryInfo
-          const fillColor = country === 'Armenia' ? '#9e9e9e' 
-            : avgAccuracy > 0.9 ? '#34a853' 
-            : avgAccuracy > 0.8 ? '#fbbc04' : '#ea4335'
-          const fillOpacity = country === 'Armenia' ? 0.5 
-            : Math.max(0.5, Math.min(1, count / maxCount))
+          const fillColor = countryInfo.country === 'Armenia' ? '#9e9e9e' 
+            : countryInfo.avg_accuracy > 0.9 ? '#34a853' 
+            : countryInfo.avg_accuracy > 0.8 ? '#fbbc04' : '#ea4335'
+          const fillOpacity = countryInfo.country === 'Armenia' ? 0.5 
+            : Math.max(0.5, Math.min(1, countryInfo.experiment_count / maxCount))
 
           return {
             fillColor,
@@ -175,22 +232,28 @@ export default function CountryMapD3({ data }: CountryMapD3Props) {
           const countryInfo = isoDataMap[iso]
           
           if (countryInfo) {
-            const { country, count, avgAccuracy } = countryInfo
-            const label = country === 'Armenia' ? `${country} (Synthetic)` : country
-            layer.bindPopup(`<strong>${label}</strong><br/>Experiments: ${count}<br/>Avg Accuracy: ${(avgAccuracy * 100).toFixed(1)}%`)
+            const label = countryInfo.country === 'Armenia' ? `${countryInfo.country} (Synthetic)` : countryInfo.country
+            layer.bindPopup(`<strong>${label}</strong><br/>Experiments: ${countryInfo.experiment_count.toLocaleString()}<br/>Avg Accuracy: ${(countryInfo.avg_accuracy * 100).toFixed(1)}%`)
           }
         }
       }).addTo(map)
     } else {
-      Object.entries(countryData).forEach(([country, stats]) => {
-        const coords = COUNTRY_COORDS[country]
-        if (!coords) return
+      // Fallback to circle markers
+      console.log('Using circle marker fallback')
+      Object.values(countryDataMap).forEach((countryInfo) => {
+        const coords = COUNTRY_COORDS[countryInfo.country]
+        if (!coords) {
+          console.warn(`⚠️ No coordinates for country: ${countryInfo.country}`)
+          return
+        }
 
-        const color = country === 'Armenia' ? '#9e9e9e'
-          : stats.avgAccuracy > 0.9 ? '#34a853'
-          : stats.avgAccuracy > 0.8 ? '#fbbc04' : '#ea4335'
-        const fillOpacity = country === 'Armenia' ? 0.4 
-          : Math.max(0.4, Math.min(1, stats.count / maxCount))
+        const color = countryInfo.country === 'Armenia' ? '#9e9e9e'
+          : countryInfo.avg_accuracy > 0.9 ? '#34a853'
+          : countryInfo.avg_accuracy > 0.8 ? '#fbbc04' : '#ea4335'
+        const fillOpacity = countryInfo.country === 'Armenia' ? 0.4 
+          : Math.max(0.4, Math.min(1, countryInfo.experiment_count / maxCount))
+
+        console.log(`Adding circle marker for ${countryInfo.country}:`, { coords, color, count: countryInfo.experiment_count })
 
         L.circleMarker(coords, {
           radius: 50,
@@ -200,9 +263,9 @@ export default function CountryMapD3({ data }: CountryMapD3Props) {
           opacity: 1,
           fillOpacity
         }).addTo(map).bindPopup(`
-          <strong>${country}${country === 'Armenia' ? ' (Synthetic)' : ''}</strong><br/>
-          Experiments: ${stats.count}<br/>
-          Avg Accuracy: ${(stats.avgAccuracy * 100).toFixed(1)}%
+          <strong>${countryInfo.country}${countryInfo.country === 'Armenia' ? ' (Synthetic)' : ''}</strong><br/>
+          Experiments: ${countryInfo.experiment_count.toLocaleString()}<br/>
+          Avg Accuracy: ${(countryInfo.avg_accuracy * 100).toFixed(1)}%
         `)
       })
     }

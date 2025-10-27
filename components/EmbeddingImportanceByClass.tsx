@@ -1,75 +1,66 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList } from 'recharts'
+import type { EmbeddingImportance } from '@/lib/types'
 
-type ParsedRow = any
+interface EmbeddingImportanceByClassProps {
+  data: EmbeddingImportance[]
+  topN?: number
+}
 
-export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: ParsedRow[]; topN?: number }){
-  const data = useMemo(()=>{
-    if(!rows || rows.length===0) return null
+export default function EmbeddingImportanceByClass({ data, topN = 8 }: EmbeddingImportanceByClassProps){
+  const processedData = useMemo(()=>{
+    if(!data || data.length===0) return null
     
-    // Collect importance per embedding per SPECIFIC class (not "All other classes")
-    const map = new Map<string, Map<string, number[]>>()
+    // Group by class_pair, then by embedding
+    const classPairMap = new Map<string, Map<string, number[]>>()
     
-    rows.forEach((r:any)=>{
-      let embeddings = r.topEmbeddings || []
+    data.forEach(item => {
+      // Extract the specific class (not "All other classes")
+      const parts = item.class_pair.split(' vs ')
+      const specificClass = parts[0] === 'All other classes' ? parts[1] : parts[0]
       
-      // Fallback parsing if needed
-      if((!embeddings || embeddings.length===0) && typeof r.id === 'string'){
-        const txt = r.id
-        const pairs: Array<{ id: string; importance: number }> = []
-        const re = /([A-Za-z]\d{1,3})\s*[,\t]\s*\"?([0-9]+(?:[.,][0-9]+)?)\"?/g
-        let m: RegExpExecArray | null
-        while((m = re.exec(txt)) !== null){
-          const embId = m[1].toUpperCase()
-          const rawVal = m[2]
-          const val = Number(String(rawVal).replace(/\./g,'').replace(/,/g,'.'))
-          if(Number.isFinite(val)) pairs.push({ id: embId, importance: val })
-        }
-        pairs.sort((a,b)=>b.importance - a.importance)
-        embeddings = pairs.slice(0,12)
+      if(!classPairMap.has(specificClass)) {
+        classPairMap.set(specificClass, new Map())
       }
+      const embMap = classPairMap.get(specificClass)!
       
-      const c1 = r.classes?.c1Name || r.classes?.c1Code || 'class_1'
-      const c2 = r.classes?.c2Name || r.classes?.c2Code || 'class_2'
-      
-      // FIXED: Only add to the specific class, not "All other classes"
-      const specificClass = c1 === 'All other classes' ? c2 : c1
-      
-      if(!map.has(specificClass)) map.set(specificClass, new Map())
-      const m = map.get(specificClass)!
-      
-      ;(embeddings||[]).forEach((e:any)=>{
-        const id = String(e.id||e.name||e).toUpperCase()
-        const val = Number(e.importance ?? e[1] ?? 0)
-        if(!m.has(id)) m.set(id, [])
-        m.get(id)!.push(val)
-      })
+      if(!embMap.has(item.embedding)) {
+        embMap.set(item.embedding, [])
+      }
+      embMap.get(item.embedding)!.push(item.avg_importance)
     })
 
-    console.log('Classes found after filtering:', Array.from(map.keys()))
+    console.log('Classes found:', Array.from(classPairMap.keys()))
 
-    // Compute embedding set and topN overall
+    // Get top embeddings overall
     const embeddingSet = new Set<string>()
-    Array.from(map.values()).forEach(m=> Array.from(m.keys()).forEach(k=>embeddingSet.add(k)))
+    Array.from(classPairMap.values()).forEach(m => Array.from(m.keys()).forEach(k => embeddingSet.add(k)))
+    
     const embMeans: Record<string, number> = {}
     Array.from(embeddingSet).forEach(emb=>{
       let sum=0, cnt=0
-      Array.from(map.values()).forEach(m=>{
+      Array.from(classPairMap.values()).forEach(m=>{
         const vals = m.get(emb) || []
-        if(vals.length){ sum += vals.reduce((s,n)=>s+Number(n),0)/vals.length; cnt++ }
+        if(vals.length){ 
+          sum += vals.reduce((s,n)=>s+n,0)/vals.length
+          cnt++ 
+        }
       })
       embMeans[emb] = cnt ? sum/cnt : 0
     })
-    const embMeanOverall = Object.keys(embMeans).map(k=>({id:k, mean: embMeans[k]})).sort((a,b)=>b.mean-a.mean)
+    
+    const embMeanOverall = Object.keys(embMeans)
+      .map(k=>({id:k, mean: embMeans[k]}))
+      .sort((a,b)=>b.mean-a.mean)
     const topEmbeddings = embMeanOverall.slice(0, topN).map(d=>d.id)
 
-    // Build chart rows per class, ordering embeddings per-class
+    // Build chart rows per class
     const out: any[] = []
-    Array.from(map.entries()).forEach(([cl,m])=>{
+    Array.from(classPairMap.entries()).forEach(([cl, m])=>{
       const list: {emb:string; val:number}[] = []
       topEmbeddings.forEach(emb=>{
         const vals = m.get(emb) || []
-        const avg = vals.length ? vals.reduce((s,n)=>s+Number(n),0)/vals.length : 0
+        const avg = vals.length ? vals.reduce((s,n)=>s+n,0)/vals.length : 0
         list.push({ emb, val: avg })
       })
       list.sort((a,b)=>b.val - a.val)
@@ -79,13 +70,13 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
     })
 
     return { out, topEmbeddings }
-  }, [rows, topN])
+  }, [data, topN])
 
   const [hover, setHover] = useState<{ cls?: string; pos?: number; value?: number; emb?: string; x?: number; y?: number } | null>(null)
   const [visibleCount, setVisibleCount] = useState<number>(0)
 
-  const chartDataFull = useMemo(()=> data?.out ?? [], [data])
-  const topEmbeddings = useMemo(()=> data?.topEmbeddings ?? [], [data])
+  const chartDataFull = useMemo(()=> processedData?.out ?? [], [processedData])
+  const topEmbeddings = useMemo(()=> processedData?.topEmbeddings ?? [], [processedData])
 
   useEffect(()=>{
     function recompute(){
@@ -126,7 +117,9 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
     return compactMode ? Math.max(3, Math.min(bs, 8)) : Math.max(4, Math.min(bs, 18))
   }, [visibleCount, topEmbeddings.length, compactMode, chartDataFull.length])
 
-  if(!data || !data.out || data.out.length===0 || chartData.length===0) return <div>No embedding importance data available.</div>
+  if(!processedData || !processedData.out || processedData.out.length===0 || chartData.length===0) {
+    return <div>No embedding importance data available.</div>
+  }
 
   const groupWidthPx = Math.max(20, topEmbeddings.length * barSize + 4)
   const requiredWidth = Math.max(300, (visibleCount || chartDataFull.length) * groupWidthPx)
@@ -194,6 +187,9 @@ export default function EmbeddingImportanceByClass({ rows, topN = 8 }:{ rows: Pa
           <div style={{ color: '#5f6368' }}>{hover.emb}: {Number(hover.value).toFixed(4)}</div>
         </div>
       )}
+      <div style={{ marginTop: 12, fontSize: 11, color: '#5f6368', textAlign: 'center' }}>
+        Bars ordered left-to-right by descending importance within each embedding. Same color = same class pair.
+      </div>
     </div>
   )
 }

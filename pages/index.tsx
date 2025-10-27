@@ -1,43 +1,20 @@
+// pages/index.tsx
 import Layout from '@/components/Layout'
 import { useFetch } from '@/lib/useFetch'
 import dynamic from 'next/dynamic'
 import { useDarkMode } from '@/lib/useDarkMode'
 import { Moon, Sun } from 'lucide-react'
+import type { Statistics } from '@/lib/types'
 
 const EmbeddingImportanceByClass = dynamic(() => import('@/components/EmbeddingImportanceByClass'), { ssr: false })
 const CountryMap = dynamic(() => import('@/components/CountryMap'), { ssr: false })
 const ModelAccuracyChart = dynamic(() => import('@/components/ModelAccuracyChart'), { ssr: false })
 
 export default function Home(){
-  const { data: metrics, isLoading: metricsLoading, error: metricsError } = useFetch<any[]>('metrics','/api/metrics?source=interactions')
-  const { data: experiments, isLoading: experimentsLoading, error: experimentsError } = useFetch<any[]>('experiments','/api/experiments')
-  const { data: interactions, isLoading: interactionsLoading, error: interactionsError } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=100000')
-  
-  //* TENT DEBUGGING
-  console.log('Loading states:', { metricsLoading, experimentsLoading, interactionsLoading })
-  console.log('Errors:', { metricsError, experimentsError, interactionsError })
+  // Fetch pre-computed statistics - MUCH faster!
+  const { data: stats, isLoading, error } = useFetch<Statistics>('statistics', '/api/statistics')
   
   const { darkMode, toggleDarkMode } = useDarkMode()
-  
-  
-  const isLoading = metricsLoading || experimentsLoading || interactionsLoading
-  const metricsArray = Array.isArray(metrics) ? metrics : []
-  const allParsedRows = (interactions as any)?.parsedRows || []
-  
-  const parsedRows = allParsedRows.filter((row: any) => {
-    if (!row.classes) return false
-    const c1 = row.classes.c1Name || ''
-    const c2 = row.classes.c2Name || ''
-    return c1 === 'All other classes' || c2 === 'All other classes'
-  })
-  
-  const filteredMetrics = metricsArray.filter((metric: any) => {
-    const matchingRow = allParsedRows.find((r: any) => r.id === metric.experiment_id)
-    if (!matchingRow || !matchingRow.classes) return false
-    const c1 = matchingRow.classes.c1Name || ''
-    const c2 = matchingRow.classes.c2Name || ''
-    return c1 === 'All other classes' || c2 === 'All other classes'
-  })
   
   const theme = {
     bg: darkMode ? '#0f0f0f' : '#fafafa',
@@ -50,53 +27,67 @@ export default function Home(){
     accent: '#1967d2'
   }
 
-  const LoadingOverlay = () => (
+  const ComponentLoading = ({ message }: { message: string }) => (
     <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0,0,0,0.85)',
-      backdropFilter: 'blur(5px)',
       display: 'flex',
-      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 9999,
-      gap: 16
+      padding: 40,
+      color: theme.textSecondary,
+      fontSize: 14
     }}>
-      <div style={{
-        fontSize: 18,
-        fontWeight: 500,
-        color: '#e8e8e8'
-      }}>
-        Loading Data
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 24,
+          height: 24,
+          border: `3px solid ${theme.border}`,
+          borderTopColor: theme.accent,
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        {message}
       </div>
-      <div style={{
-        fontSize: 14,
-        color: '#e8e8e8',
-        textAlign: 'center',
-        maxWidth: 400
-      }}>
-        {interactionsLoading 
-    ? `Processing experiments...`
-    : metricsLoading 
-    ? `Loading metrics...`
-    : `Almost ready...`}
-      </div>
+      <style jsx>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
   
+  if (isLoading) {
+    return (
+      <Layout darkMode={darkMode}>
+        <ComponentLoading message="Loading dashboard..." />
+      </Layout>
+    )
+  }
+  
+  if (error || !stats) {
+    return (
+      <Layout darkMode={darkMode}>
+        <div style={{ padding: 40, textAlign: 'center', color: theme.textSecondary }}>
+          Error loading statistics. Make sure to run: <code>npm run compute-stats</code>
+        </div>
+      </Layout>
+    )
+  }
+
+  // Transform model performance data for ModelAccuracyChart component
+  const modelChartData = stats.model_performance.map(m => ({
+    experiment_id: '',
+    metric_name: 'accuracy',
+    metric_value: m.avg_accuracy,
+    country: '',
+    model: m.model
+  }))
+  
   return (
     <Layout darkMode={darkMode}>
-      {isLoading && <LoadingOverlay />}
       <div style={{ 
         background: theme.bg,
         minHeight: '100vh',
-        transition: 'background 0.3s ease',
-        pointerEvents: isLoading ? 'none' : 'auto',
-        opacity: isLoading ? 0.5 : 1
+        transition: 'background 0.3s ease'
       }}>
         <div style={{ 
           maxWidth: 1600, 
@@ -166,7 +157,17 @@ export default function Home(){
               fontWeight: 400,
               letterSpacing: '0.3px',
               transition: 'color 0.3s ease'
-            }}>Our findings so far...</p>
+            }}>
+              Our findings so far... ({stats.metadata.total_experiments.toLocaleString()} experiments analyzed)
+            </p>
+            <p style={{ 
+              margin: '8px 0 0 0', 
+              color: theme.textSecondary, 
+              fontSize: 12,
+              fontWeight: 400
+            }}>
+              Last updated: {new Date(stats.generated_at).toLocaleString()}
+            </p>
           </div>
           
           <div style={{ display: 'grid', gap: 20, paddingBottom: 40 }}>
@@ -202,28 +203,30 @@ export default function Home(){
                       </tr>
                     </thead>
                     <tbody>
-                      {parsedRows.slice(0, 10).map((row: any, idx: number) => (
+                      {stats.recent_experiments.slice(0, 10).map((exp, idx) => (
                         <tr key={idx} style={{ borderBottom: idx < 9 ? `1px solid ${theme.tableBorder}` : 'none' }}>
                           <td style={{ padding: '8px 12px', fontSize: 11, color: theme.textSecondary, whiteSpace: 'nowrap' }}>
-                            {row.id ? new Date(row.id).toLocaleString('en-US', { 
+                            {new Date(exp.timestamp).toLocaleString('en-US', { 
                               month: 'short', 
                               day: 'numeric', 
                               hour: '2-digit', 
                               minute: '2-digit' 
-                            }).replace(',', '') : '—'}
+                            }).replace(',', '')}
                           </td>
-                          <td style={{ padding: '8px 12px', color: theme.textPrimary, fontWeight: 400, fontSize: 11 }}>{row.country || '—'}</td>
+                          <td style={{ padding: '8px 12px', color: theme.textPrimary, fontWeight: 400, fontSize: 11 }}>{exp.country}</td>
                           <td style={{ padding: '8px 12px', fontSize: 11, color: theme.textPrimary }}>
-                            {row.classes?.c1Name && row.classes?.c2Name 
-                              ? `${row.classes.c1Name} vs ${row.classes.c2Name}` 
-                              : '—'}
+                            {`${exp.name_class1} vs ${exp.name_class2}`}
                           </td>
                           <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: theme.accent, fontSize: 12 }}>
-                            {row.metrics?.accuracy != null ? (row.metrics.accuracy * 100).toFixed(0) + '%' : '—'}
+                            {(exp.accuracy * 100).toFixed(0)}%
                           </td>
                           <td style={{ padding: '8px 12px' }}>
                             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {row.topEmbeddings?.slice(0, 3).map((emb: any, i: number) => (
+                              {[
+                                { id: exp.embedding, imp: exp.importance },
+                                { id: exp['embedding.1'], imp: exp['importance.1'] },
+                                { id: exp['embedding.2'], imp: exp['importance.2'] }
+                              ].map((emb, i) => (
                                 <span key={i} style={{ 
                                   fontSize: 10,
                                   color: theme.accent,
@@ -233,7 +236,7 @@ export default function Home(){
                                   {emb.id}
                                   {i < 2 && <span style={{ color: theme.border, margin: '0 2px' }}>•</span>}
                                 </span>
-                              )) || '—'}
+                              ))}
                             </div>
                           </td>
                         </tr>
@@ -250,7 +253,7 @@ export default function Home(){
                   textAlign: 'right',
                   transition: 'all 0.3s ease'
                 }}>
-                  Showing {Math.min(10, parsedRows.length)} of {parsedRows.length}+ experiments
+                  Showing 10 of {stats.recent_experiments.length} recent experiments
                 </div>
               </div>
 
@@ -267,7 +270,7 @@ export default function Home(){
                 <h2 style={{ fontSize: 13, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
                   Model Performance
                 </h2>
-                <ModelAccuracyChart data={filteredMetrics} />
+                <ModelAccuracyChart data={modelChartData} />
               </div>
             </div>
 
@@ -284,7 +287,7 @@ export default function Home(){
               <h2 style={{ fontSize: 14, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
                 Geographic Distribution
               </h2>
-              <CountryMap data={filteredMetrics} />
+              <CountryMap data={stats.country_distribution} />
             </div>
 
             <div style={{ 
@@ -298,9 +301,10 @@ export default function Home(){
               transition: 'all 0.3s ease'
             }}>
               <h2 style={{ fontSize: 14, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
-                Embedding Importance
+                Embedding Importance ({stats.summary.total_models} models analyzed)
               </h2>
-              <EmbeddingImportanceByClass rows={parsedRows} />
+              {/* Pass the embedding importance data to your component */}
+              <EmbeddingImportanceByClass data={stats.embedding_importance_by_class} />
             </div>
           </div>
         </div>

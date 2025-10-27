@@ -1,67 +1,48 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
-import fs from 'fs'
-import path from 'path'
-import Papa from 'papaparse'
-import { parseAlphaEarthRow } from '../../lib/ingest'
-
-const CANDIDATES = [
-  'prod_alphaearth_user_interactions.csv'
-]
-
-function findInteractionsFile(): { fullPath: string; name: string } | null {
-  for (const f of CANDIDATES) {
-    const full = path.join(process.cwd(), 'data', f)
-    if (fs.existsSync(full)) return { fullPath: full, name: f }
-  }
-  return null
-}
+import { getCachedInteractions, getRawCSV, getCSVFilename } from '../../lib/dataCache'
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const found = findInteractionsFile()
-  if (!found) {
-    res.status(404).json({ error: 'interactions CSV not found' })
-    return
-  }
-
-  const csv = fs.readFileSync(found.fullPath, 'utf8')
-
+  // Handle download requests
   if (String(req.query.download || '') === '1' || String(req.query.download || '').toLowerCase() === 'true') {
+    const csv = getRawCSV()
+    const filename = getCSVFilename()
+    
     res.setHeader('Content-Type', 'text/csv; charset=utf-8')
-    res.setHeader('Content-Disposition', `attachment; filename="${found.name.replace(/\"/g,'') }"`)
+    res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/\"/g,'')}"`)
     res.status(200).send(csv)
     return
   }
 
-  // REMOVED LIMIT CAP - now respects the full limit parameter
   const limit = Number(req.query.limit || 1000)
-  console.log(`Interactions API: Processing up to ${limit} rows`)
+  const filterClasses = req.query.filterClasses === 'true'
+  
+  console.log(`Interactions API: Requesting up to ${limit} rows, filterClasses: ${filterClasses}`)
 
-  const lines = csv.split(/\r?\n/).filter(l=>l.trim())
-  if (lines.length > 0 && /date|timestamp/i.test(lines[0])) lines.shift()
-
-  const parsedRows: any[] = []
-  for (const l of lines) {
-    if (parsedRows.length >= limit) break
-    try {
-      let inputLine = l
-      if (/\".*\,.*\"|,/.test(l)) {
-        const p = Papa.parse(l, { delimiter: ',', quoteChar: '"', skipEmptyLines: true })
-        if (Array.isArray(p.data) && p.data.length > 0) {
-          const rowFields = p.data[0]
-          inputLine = rowFields.join('\t')
-        }
-      }
-      const pr = parseAlphaEarthRow(inputLine)
-      parsedRows.push(pr)
-    } catch (e) {
-      // ignore parse errors
+  try {
+    let parsedRows = getCachedInteractions(limit)
+    
+    // Apply server-side filtering if requested
+    if (filterClasses) {
+      console.log(`Interactions API: Pre-filter count: ${parsedRows.length}`)
+      
+      parsedRows = parsedRows.filter((row: any) => {
+        if (!row.classes) return false
+        const c1 = row.classes.c1Name || ''
+        const c2 = row.classes.c2Name || ''
+        return c1 === 'All other classes' || c2 === 'All other classes'
+      })
+      
+      console.log(`Interactions API: Post-filter count: ${parsedRows.length}`)
     }
+    
+    console.log(`Interactions API: Returning ${parsedRows.length} rows`)
+    res.status(200).json({
+      parsedRows,
+      totalProcessed: parsedRows.length,
+      totalAvailable: parsedRows.length
+    })
+  } catch (error) {
+    console.error('Error loading interactions:', error)
+    res.status(500).json({ error: 'Failed to load interactions data' })
   }
-
-  console.log(`Interactions API: Successfully parsed ${parsedRows.length} rows`)
-  res.status(200).json({
-    parsedRows,
-    totalProcessed: parsedRows.length,
-    totalAvailable: lines.length
-  })
 }

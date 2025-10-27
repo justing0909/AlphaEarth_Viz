@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import * as d3 from 'd3'
+import type { EmbeddingCooccurrence, EmbeddingCooccurrenceByClass } from '@/lib/types'
 
 interface EmbeddingCooccurrenceNetworkProps {
-  data: any[]
-  topN?: number
+  cooccurrenceData: EmbeddingCooccurrence[]
+  cooccurrenceByClass: EmbeddingCooccurrenceByClass[]
 }
 
-export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: EmbeddingCooccurrenceNetworkProps) {
+export default function EmbeddingCooccurrenceNetwork({ cooccurrenceData, cooccurrenceByClass }: EmbeddingCooccurrenceNetworkProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [clickFrozenEdge, setClickFrozenEdge] = useState<any>(null)
@@ -17,50 +18,38 @@ export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: Embeddi
   const labelSelectionRef = useRef<any>(null)
 
   useEffect(() => {
-    if (!data || data.length === 0 || !svgRef.current) return
-
-    const cooccurrence: Record<string, { 
-      count: number
-      classPairs: Record<string, number>
-    }> = {}
+    if (!cooccurrenceData || cooccurrenceData.length === 0 || !svgRef.current) return
     
     const allEmbeddings = new Set<string>()
-
-    data.forEach(row => {
-      if (!row.topEmbeddings || !row.classes) return
-      
-      const classPair = `${row.classes.c1Name} vs ${row.classes.c2Name}`
-      const topEmbs = row.topEmbeddings.slice(0, topN).map((e: any) => e.id)
-      
-      topEmbs.forEach((e: string) => allEmbeddings.add(e))
-
-      for (let i = 0; i < topEmbs.length; i++) {
-        for (let j = i + 1; j < topEmbs.length; j++) {
-          const pairKey = [topEmbs[i], topEmbs[j]].sort().join('|||')
-          
-          if (!cooccurrence[pairKey]) {
-            cooccurrence[pairKey] = { count: 0, classPairs: {} }
-          }
-          
-          cooccurrence[pairKey].count++
-          cooccurrence[pairKey].classPairs[classPair] = (cooccurrence[pairKey].classPairs[classPair] || 0) + 1
-        }
-      }
+    cooccurrenceData.forEach(item => {
+      allEmbeddings.add(item.embedding1)
+      allEmbeddings.add(item.embedding2)
     })
 
     const nodes = Array.from(allEmbeddings).map(emb => ({ id: emb }))
 
-    const links = Object.entries(cooccurrence)
-      .filter(([_, data]) => data.count > 1)
-      .map(([pairKey, data]) => {
-        const [e1, e2] = pairKey.split('|||')
-        return {
-          source: e1,
-          target: e2,
-          value: data.count,
-          classPairs: data.classPairs
-        }
-      })
+    // Build links with class pair distribution
+    const links = cooccurrenceData.map(item => {
+      // Find class pair breakdown for this embedding pair
+      const classPairBreakdown: Record<string, number> = {}
+      
+      cooccurrenceByClass
+        .filter(cb => 
+          (cb.embedding1 === item.embedding1 && cb.embedding2 === item.embedding2) ||
+          (cb.embedding1 === item.embedding2 && cb.embedding2 === item.embedding1)
+        )
+        .forEach(cb => {
+          const classPair = `${cb.class1} vs ${cb.class2}`
+          classPairBreakdown[classPair] = cb.count
+        })
+
+      return {
+        source: item.embedding1,
+        target: item.embedding2,
+        value: item.cooccurrence_count,
+        classPairs: classPairBreakdown
+      }
+    })
 
     const svg = d3.select(svgRef.current)
     svg.selectAll('*').remove()
@@ -283,7 +272,7 @@ export default function EmbeddingCooccurrenceNetwork({ data, topN = 5 }: Embeddi
     return () => {
       simulation.stop()
     }
-  }, [data, topN])
+  }, [cooccurrenceData, cooccurrenceByClass])
 
   // Handle node selection changes
   useEffect(() => {

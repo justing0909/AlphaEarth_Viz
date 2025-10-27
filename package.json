@@ -3,9 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
+    "predev": "python compute_statistics.py",
     "dev": "next dev",
+    "prebuild": "python compute_statistics.py",
     "build": "next build",
     "start": "next start",
+    "compute-stats": "python compute_statistics.py",
+    "compute-stats-watch": "nodemon --watch data/*.csv, --exec python compute_statistics.py",
     "lint": "next lint"
   },
   "dependencies": {
@@ -21,7 +25,8 @@
     "react-leaflet": "4.2.1",
     "react-plotly.js": "2.6.0",
     "recharts": "2.12.7",
-    "zustand": "4.5.4"
+    "zustand": "4.5.4",
+    "polars": "0.16.14"
   },
   "devDependencies": {
     "@types/leaflet": "1.9.8",
@@ -29,6 +34,7 @@
     "@types/react": "18.2.66",
     "eslint": "8.57.0",
     "eslint-config-next": "14.2.4",
-    "typescript": "5.5.4"
+    "typescript": "5.5.4",
+    "nodemon":"^3.0.1"
   }
 }

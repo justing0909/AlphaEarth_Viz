@@ -3,20 +3,21 @@ import { useFetch } from '@/lib/useFetch'
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useDarkMode } from '@/lib/useDarkMode'
+import type { Statistics } from '@/lib/types'
 
 const EmbeddingByClassPairBar = dynamic(() => import('@/components/EmbeddingByClassPairBar'), { ssr: false })
 const ClassDemandNetwork = dynamic(() => import('@/components/ClassDemandNetwork'), { ssr: false })
 const EmbeddingCooccurrenceNetwork = dynamic(() => import('@/components/EmbeddingCooccurrenceNetwork'), { ssr: false })
 const ClassPerformanceMatrix = dynamic(() => import('@/components/ClassPerformanceMatrix'), { ssr: false })
+const SyntheticDataComparison = dynamic(() => import('@/components/SyntheticDataComparison'), { ssr: false })
+const UnifiedMLMatrix = dynamic(() => import('@/components/ClassPerformanceMatrix'), { ssr: false })
 
-type ViewType = 'grouped' | 'class-network' | 'embedding-network' | 'performance'
+type ViewType = 'performance' | 'unified-matrix' | 'synthetic' | 'class-network' | 'embedding-network' | 'grouped'
 
 export default function Conceptual(){
-  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=100000')
+  const { data: stats, isLoading } = useFetch<Statistics>('statistics', '/api/statistics')
   const [activeView, setActiveView] = useState<ViewType>('performance')
   const { darkMode } = useDarkMode()
-  
-  const parsedRows = interactions?.parsedRows || []
 
   const theme = {
     bg: darkMode ? '#0f0f0f' : '#fafafa',
@@ -32,11 +33,23 @@ export default function Conceptual(){
   }
 
   const views = [
-    { id: 'performance', label: 'Performance Matrix', description: 'Individual class performance metrics in a 2×2 grid' },
+    { id: 'performance', label: 'Performance Matrix', description: 'Individual class pair performance metrics in heatmaps' },
+    { id: 'unified-matrix', label: 'Unified ML Matrix', description: 'All metrics for [Class] vs "All Other Classes"' },
+    { id: 'synthetic', label: 'Synthetic Data (Armenia)', description: 'ML metrics by class for synthetic experiments' },
     { id: 'class-network', label: 'Class Demand', description: 'Which classes are tested together most often?' },
     { id: 'embedding-network', label: 'Embedding Co-occurrence', description: 'Which embeddings appear together in top performers?' },
     { id: 'grouped', label: 'Grouped Bar', description: 'Embedding importance comparison by class pair' }
   ]
+
+  if (isLoading || !stats) {
+    return (
+      <Layout darkMode={darkMode}>
+        <div style={{ padding: 60, textAlign: 'center', color: theme.textSecondary }}>
+          Loading conceptual analysis...
+        </div>
+      </Layout>
+    )
+  }
 
   return (
     <Layout darkMode={darkMode}>
@@ -56,14 +69,14 @@ export default function Conceptual(){
           marginBottom: 8,
           letterSpacing: '-0.5px',
           transition: 'color 0.3s ease'
-        }}>Embedding Analysis by Class Pair</h1>
+        }}>Class & Embedding Analysis</h1>
         <p style={{ 
           textAlign: 'center',
           color: theme.textSecondary,
           fontSize: 15,
           marginBottom: 32,
           transition: 'color 0.3s ease'
-        }}>Understanding which embeddings are most important for different classification tasks</p>
+        }}>Understanding classification performance and embedding relationships</p>
       
         <div style={{ marginTop: 24, marginBottom: 24 }}>
           <div style={{ display: 'flex', gap: 8, borderBottom: `2px solid ${theme.border}`, paddingBottom: 0, flexWrap: 'wrap', justifyContent: 'center' }}>
@@ -93,26 +106,28 @@ export default function Conceptual(){
           </div>
         </div>
 
-        {parsedRows.length === 0 ? (
-          <div style={{ padding: 60, textAlign: 'center', color: theme.textSecondary, background: theme.cardBg, borderRadius: 8, border: `1px solid ${theme.border}`, transition: 'all 0.3s ease' }}>
-            Loading data...
-          </div>
-        ) : (
-          <div style={{ background: theme.cardBg, padding: 24, borderRadius: 8, border: `1px solid ${theme.border}`, transition: 'all 0.3s ease' }}>
-            {activeView === 'grouped' && <EmbeddingByClassPairBar data={parsedRows} />}
-            {activeView === 'class-network' && <ClassDemandNetwork data={parsedRows} />}
-            {activeView === 'embedding-network' && <EmbeddingCooccurrenceNetwork data={parsedRows} topN={5} />}
-            {activeView === 'performance' && <ClassPerformanceMatrix data={parsedRows} />}
-          </div>
-        )}
+        <div style={{ background: theme.cardBg, padding: 24, borderRadius: 8, border: `1px solid ${theme.border}`, transition: 'all 0.3s ease' }}>
+          {activeView === 'performance' && <ClassPerformanceMatrix data={stats.unified_ml_matrix} />}
+          {activeView === 'unified-matrix' && <UnifiedMLMatrix data={stats.unified_ml_matrix} />}
+          {activeView === 'synthetic' && <SyntheticDataComparison data={stats.synthetic_class_stats} />}
+          {activeView === 'class-network' && <ClassDemandNetwork data={stats.class_cooccurrence} />}
+          {activeView === 'embedding-network' && (
+            <EmbeddingCooccurrenceNetwork 
+              cooccurrenceData={stats.embedding_cooccurrence}
+              cooccurrenceByClass={stats.embedding_cooccurrence_by_class}
+            />
+          )}
+          {activeView === 'grouped' && <EmbeddingByClassPairBar data={stats.embedding_rankings_by_class} />}
+        </div>
 
         <div style={{ marginTop: 24, padding: 20, background: theme.infoBg, borderRadius: 8, fontSize: 14, lineHeight: 1.6, border: `1px solid ${theme.border}`, transition: 'all 0.3s ease' }}>
           <strong style={{ display: 'block', marginBottom: 8, color: theme.infoText }}>Key Insights:</strong>
           <ul style={{ margin: 0, paddingLeft: 20, color: theme.textPrimary }}>
-            <li><strong>Performance Matrix:</strong> See precision/recall/F1/accuracy for each class and their pairings</li>
-            <li><strong>Class Demand:</strong> Thicker edges = more tests between those classes. Hover edges for counts</li>
-            <li><strong>Embedding Co-occurrence:</strong> Click edges to freeze the class pair distribution popup</li>
-            <li><strong>Grouped Bar:</strong> Compare embedding importance across different classification tasks</li>
+            <li><strong>Performance Bar Graph:</strong> See precision/recall/F1/accuracy for each class pair</li>
+            <li><strong>Synthetic Data Spotlight:</strong> Armenia experiments showing ML performance by class</li>
+            <li><strong>Class Demand Network:</strong> Thicker edges = more tests between those classes</li>
+            <li><strong>Embedding Co-occurrence Network:</strong> Click edges to freeze the class pair distribution</li>
+            <li><strong>Importance Bar Chart By Embedding:</strong> Compare embedding importance rankings across tasks</li>
           </ul>
         </div>
       </div>

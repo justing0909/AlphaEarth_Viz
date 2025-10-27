@@ -1,14 +1,18 @@
+// pages/geo.tsx
 import Layout from '@/components/Layout'
 import dynamic from 'next/dynamic'
 import { useFetch } from '@/lib/useFetch'
-import { useMemo } from 'react'
 import { useDarkMode } from '@/lib/useDarkMode'
+import { useState } from 'react'
+import type { Statistics } from '@/lib/types'
 
-const LeafletMap = dynamic(()=>import('@/components/LeafletMap'), { ssr:false })
+const ROIMap = dynamic(() => import('@/components/ROIMap'), { ssr: false })
+const HeatmapInterpolated = dynamic(() => import('@/components/HeatmapInterpolated'), { ssr: false })
 
 export default function Geo(){
-  const { data: interactions } = useFetch<any>('interactions','/api/interactions?source=interactions&limit=25000')
+  const { data: stats, isLoading } = useFetch<Statistics>('statistics', '/api/statistics')
   const { darkMode } = useDarkMode()
+  const [maxBboxes, setMaxBboxes] = useState(1000) // Start with 1000
   
   const theme = {
     bg: darkMode ? '#0f0f0f' : '#fafafa',
@@ -17,50 +21,19 @@ export default function Geo(){
     textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
     border: darkMode ? '#333' : '#dadce0'
   }
-  
-  // Convert parsed rows to GeoJSON using actual bounding boxes
-  const geo = useMemo(()=>{
-    const parsedRows = (interactions as any)?.parsedRows || []
-    if (parsedRows.length === 0) return null
-    
-    const features = parsedRows
-      .filter((row: any) => row.bbox && row.bbox.length === 4)
-      .map((row: any, idx: number) => {
-        const [minLon, minLat, maxLon, maxLat] = row.bbox
-        
-        // Calculate average accuracy as importance metric
-        const importance = row.metrics?.accuracy || 0
-        
-        return {
-          type: 'Feature',
-          properties: { 
-            id: row.id || `bbox_${idx}`,
-            importance: importance,
-            country: row.country,
-            classes: `${row.classes?.c1Name || '?'} vs ${row.classes?.c2Name || '?'}`,
-            accuracy: importance,
-            samples: row.samples
-          },
-          geometry: {
-            type: 'Polygon',
-            coordinates: [[
-              [minLon, minLat],
-              [minLon, maxLat],
-              [maxLon, maxLat],
-              [maxLon, minLat],
-              [minLon, minLat]
-            ]]
-          }
-        }
-      })
-    
-    return {
-      type: 'FeatureCollection',
-      features: features
-    }
-  }, [interactions])
 
-  const parsedRows = (interactions as any)?.parsedRows || []
+  if (isLoading || !stats) {
+    return (
+      <Layout darkMode={darkMode}>
+        <div style={{ padding: 60, textAlign: 'center', color: theme.textSecondary }}>
+          Loading geographic data...
+        </div>
+      </Layout>
+    )
+  }
+
+  // Limit experiments to prevent freezing
+  const limitedExperiments = stats.geographic_experiments.slice(0, maxBboxes)
 
   return (
     <Layout darkMode={darkMode}>
@@ -80,15 +53,62 @@ export default function Geo(){
           marginBottom: 8,
           letterSpacing: '-0.5px',
           transition: 'color 0.3s ease'
-        }}>Bounding Box Distribution</h1>
+        }}>Geographic Analysis</h1>
         <p style={{ 
           textAlign: 'center',
           color: theme.textSecondary,
           fontSize: 15,
           marginBottom: 32,
           transition: 'color 0.3s ease'
-        }}>Experiment regions colored by accuracy • {parsedRows.length.toLocaleString()} experiments loaded</p>
+        }}>
+          Experiment regions and performance heatmaps • {stats.summary.experiments_with_bounding_boxes.toLocaleString()} total experiments
+        </p>
         
+        {/* Bounding Boxes Map */}
+        <div style={{ 
+          background: theme.cardBg,
+          borderRadius: 8,
+          border: `1px solid ${theme.border}`,
+          padding: 20,
+          marginBottom: 24,
+          transition: 'all 0.3s ease'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h2 style={{
+              fontSize: 18,
+              fontWeight: 500,
+              color: theme.textPrimary,
+              margin: 0,
+              transition: 'color 0.3s ease'
+            }}>Experiment Bounding Boxes</h2>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ fontSize: 13, color: theme.textSecondary }}>
+                Showing {limitedExperiments.length.toLocaleString()} of {stats.geographic_experiments.length.toLocaleString()}
+              </span>
+              <select
+                value={maxBboxes}
+                onChange={(e) => setMaxBboxes(Number(e.target.value))}
+                style={{
+                  padding: '6px 12px',
+                  border: `1px solid ${theme.border}`,
+                  borderRadius: 4,
+                  background: theme.cardBg,
+                  color: theme.textPrimary,
+                  fontSize: 13
+                }}
+              >
+                <option value={100}>100 boxes</option>
+                <option value={500}>500 boxes</option>
+                <option value={1000}>1,000 boxes</option>
+                <option value={5000}>5,000 boxes</option>
+                <option value={10000}>10,000 boxes</option>
+              </select>
+            </div>
+          </div>
+          <ROIMap experiments={limitedExperiments} roiStats={stats.roi_statistics} />
+        </div>
+
+        {/* Interpolated Heatmap */}
         <div style={{ 
           background: theme.cardBg,
           borderRadius: 8,
@@ -96,7 +116,19 @@ export default function Geo(){
           padding: 20,
           transition: 'all 0.3s ease'
         }}>
-          <LeafletMap geojson={geo} />
+          <h2 style={{
+            fontSize: 18,
+            fontWeight: 500,
+            color: theme.textPrimary,
+            marginBottom: 16,
+            transition: 'color 0.3s ease'
+          }}>Performance Heatmap (Grid-based)</h2>
+          <HeatmapInterpolated 
+            accuracyData={stats.heatmap_by_metric.accuracy}
+            f1Data={stats.heatmap_by_metric.f1}
+            recallData={stats.heatmap_by_metric.recall}
+            precisionData={stats.heatmap_by_metric.precision}
+          />
         </div>
       </div>
     </Layout>

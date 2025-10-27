@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import type { EmbeddingRanking } from '@/lib/types'
 
 interface EmbeddingByClassPairBarProps {
-  data: any[]
+  data: EmbeddingRanking[]  // Changed from any[]
 }
 
 export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBarProps) {
@@ -14,77 +15,19 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
     return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No data available</div>
   }
 
-  // Aggregate: for each embedding, track importance by class pair
-  const embeddingStats: Record<string, Record<string, number[]>> = {}
-
-  data.forEach(row => {
-    if (!row.classes || !row.topEmbeddings) return
-    
-    const classPair = `${row.classes.c1Name} vs ${row.classes.c2Name}`
-    
-    row.topEmbeddings.forEach((emb: any) => {
-      if (!embeddingStats[emb.id]) {
-        embeddingStats[emb.id] = {}
-      }
-      if (!embeddingStats[emb.id][classPair]) {
-        embeddingStats[emb.id][classPair] = []
-      }
-      embeddingStats[emb.id][classPair].push(emb.importance)
-    })
-  })
-
-  // Calculate average importance per embedding per class pair
-  const embeddingData: Array<{
-    embedding: string
-    maxImportance: number
-    pairs: Array<{ classPair: string; importance: number }>
-  }> = []
-
-  Object.entries(embeddingStats).forEach(([embId, pairData]) => {
-    const pairs = Object.entries(pairData)
-      .map(([pair, values]) => ({
-        classPair: pair,
-        importance: values.reduce((a, b) => a + b, 0) / values.length
-      }))
-      .filter(p => p.importance > 0.000001)
-      .sort((a, b) => b.importance - a.importance)
-    
-    if (pairs.length > 0) {
-      embeddingData.push({
-        embedding: embId,
-        maxImportance: Math.max(...pairs.map(p => p.importance)),
-        pairs
-      })
-    }
-  })
-
-  // Sort embeddings by their max importance
-  embeddingData.sort((a, b) => b.maxImportance - a.maxImportance)
-
-  if (embeddingData.length === 0) {
-    return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No embedding data</div>
-  }
-
-  // Calculate global max importance for consistent Y-axis across all pages
-  const globalMaxImportance = Math.max(...embeddingData.map(e => e.maxImportance))
-  const yAxisMax = Math.ceil(globalMaxImportance / 10) * 10 // Round up to nearest 10
-
-  // Paginate
-  const totalPages = Math.ceil(embeddingData.length / embedsPerPage)
+  // Get unique embeddings
+  const uniqueEmbeddings = Array.from(new Set(data.map(item => item.embedding))).sort()
+  
+  const totalPages = Math.ceil(uniqueEmbeddings.length / embedsPerPage)
   const startIdx = page * embedsPerPage
-  const pageData = embeddingData.slice(startIdx, startIdx + embedsPerPage)
+  const pageEmbeddings = uniqueEmbeddings.slice(startIdx, startIdx + embedsPerPage)
 
-  // NEW APPROACH: Create one data row per bar (not per embedding)
-  // This way we only render bars that actually exist
+  // Build chart data
   const chartData: any[] = []
   
-  // Build a consistent color map for class pairs across all embeddings
+  // Get all class pairs for color mapping
   const allClassPairs = new Set<string>()
-  pageData.forEach(embData => {
-    embData.pairs.forEach(pair => {
-      allClassPairs.add(pair.classPair)
-    })
-  })
+  data.forEach(item => allClassPairs.add(item.class_pair))
   
   const classPairList = Array.from(allClassPairs)
   const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16']
@@ -92,26 +35,39 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
   classPairList.forEach((pair, idx) => {
     colorMap[pair] = colors[idx % colors.length]
   })
-  
-  pageData.forEach((embData, embIdx) => {
-    embData.pairs.forEach((pair, pairIdx) => {
-      const shortPair = pair.classPair.length > 30 ? pair.classPair.substring(0, 27) + '...' : pair.classPair
+
+  // Calculate global max for consistent Y-axis
+  const globalMaxImportance = Math.max(...data.map(item => item.avg_importance))
+  const yAxisMax = Math.ceil(globalMaxImportance / 10) * 10
+
+  pageEmbeddings.forEach((embedding, embIdx) => {
+    // Get all class pairs for this embedding, sorted by importance
+    const embeddingPairs = data
+      .filter(item => item.embedding === embedding)
+      .sort((a, b) => b.avg_importance - a.avg_importance)
+    
+    embeddingPairs.forEach((item, pairIdx) => {
+      const shortPair = item.class_pair.length > 30 
+        ? item.class_pair.substring(0, 27) + '...' 
+        : item.class_pair
+      
       chartData.push({
-        // Add spacing between embeddings by using a composite key
-        embedding: embData.embedding,
-        xPosition: `${embIdx}_${pairIdx}`, // Unique position for each bar
-        displayLabel: pairIdx === 0 ? embData.embedding : '', // Only show label on first bar of each embedding
+        embedding: embedding,
+        xPosition: `${embIdx}_${pairIdx}`,
+        displayLabel: pairIdx === 0 ? embedding : '',
         classPair: shortPair,
-        fullClassPair: pair.classPair,
-        importance: pair.importance,
-        color: colorMap[pair.classPair],
+        fullClassPair: item.class_pair,
+        importance: item.avg_importance,
+        color: colorMap[item.class_pair],
         embeddingIndex: embIdx,
-        pairIndex: pairIdx
+        pairIndex: pairIdx,
+        occurrences: item.occurrences,
+        rank: item.rank
       })
     })
     
-    // Add spacer bars between embeddings (except after last one)
-    if (embIdx < pageData.length - 1) {
+    // Add spacers between embeddings
+    if (embIdx < pageEmbeddings.length - 1) {
       for (let i = 0; i < 2; i++) {
         chartData.push({
           embedding: '',
@@ -133,7 +89,7 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div style={{ fontSize: 14, color: '#666' }}>
-          Showing embeddings {startIdx + 1}-{Math.min(startIdx + embedsPerPage, embeddingData.length)} of {embeddingData.length}
+          Showing embeddings {startIdx + 1}-{Math.min(startIdx + embedsPerPage, uniqueEmbeddings.length)} of {uniqueEmbeddings.length}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -183,10 +139,7 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
             dataKey="xPosition"
             tick={{ fill: '#666', fontSize: 12, fontWeight: 600 }}
             label={{ value: 'Embedding', position: 'insideBottom', offset: -10 }}
-            tickFormatter={(value, index) => {
-              // Show the displayLabel (which is only set for first bar in each group)
-              return chartData[index]?.displayLabel || ''
-            }}
+            tickFormatter={(value, index) => chartData[index]?.displayLabel || ''}
           />
           <YAxis 
             domain={[0, yAxisMax]}
@@ -194,17 +147,19 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
             label={{ value: 'Importance', angle: -90, position: 'insideLeft' }}
           />
           <Tooltip 
-            contentStyle={{ background: '#fff', border: '1px solid #ddd', borderRadius: 4 }}
-            formatter={(value: any) => Number(value).toFixed(3)}
-            labelFormatter={(label) => `Embedding: ${label}`}
             content={({ active, payload }) => {
               if (active && payload && payload.length) {
                 const data = payload[0].payload
-                if (data.isSpacer) return null // Don't show tooltip for spacers
+                if (data.isSpacer) return null
                 return (
                   <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 4, padding: 8 }}>
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>{data.embedding}</div>
-                    <div style={{ color: data.color }}>{data.fullClassPair}: {data.importance.toFixed(3)}</div>
+                    <div style={{ color: data.color }}>{data.fullClassPair}</div>
+                    <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                      Importance: {data.importance.toFixed(3)}<br/>
+                      Occurrences: {data.occurrences}<br/>
+                      Rank: #{data.rank}
+                    </div>
                   </div>
                 )
               }
@@ -227,9 +182,9 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
         Bars ordered left-to-right by descending importance within each embedding. Same color = same class pair.
       </div>
       
-      {/* Legend for class pairs */}
+      {/* Legend */}
       <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: '8px 16px', justifyContent: 'center', fontSize: 12 }}>
-        {classPairList.map(pair => {
+        {classPairList.slice(0, 15).map(pair => {
           const shortPair = pair.length > 30 ? pair.substring(0, 27) + '...' : pair
           return (
             <div key={pair} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -238,6 +193,9 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
             </div>
           )
         })}
+        {classPairList.length > 15 && (
+          <span style={{ color: '#999', fontSize: 11 }}>+{classPairList.length - 15} more</span>
+        )}
       </div>
     </div>
   )
