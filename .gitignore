@@ -31,3 +31,4 @@ logs
 # Misc
 coverage/
 .cache/
+data/statistics.json
