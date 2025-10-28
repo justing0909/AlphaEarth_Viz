@@ -174,7 +174,7 @@ export default function Home(){
               fontSize: 12,
               fontWeight: 400
             }}>
-              Research led by <a href="https://gmri.org/about/staff/felipe-benavides/" style={{ color: 'inherit', textDecoration: 'underline' }}>Ivan Felipe Benavides</a>,, Postdoctorate Researcher at the Gulf of Maine Research Institute.
+              Research led by <a href="https://gmri.org/about/staff/felipe-benavides/" style={{ color: 'inherit', textDecoration: 'underline' }}>Ivan Felipe Benavides</a>, Postdoctorate Researcher at the Gulf of Maine Research Institute.
             </p>
             <p style={{ 
               margin: '8px 0 0 0', 
@@ -182,7 +182,7 @@ export default function Home(){
               fontSize: 12,
               fontWeight: 400
             }}>
-              App developed by <a href="https://www.linkedin.com/in/justinmguthrie/" style={{ color: 'inherit', textDecoration: 'underline' }}>Justin Guthrie</a>,, GIS Specialist at Enodia, Research Associate at Northeastern University.
+              App developed by <a href="https://www.linkedin.com/in/justinmguthrie/" style={{ color: 'inherit', textDecoration: 'underline' }}>Justin Guthrie</a>, GIS Specialist at Enodia, Research Associate at Northeastern University.
             </p>
           </div>
           
