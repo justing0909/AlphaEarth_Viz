@@ -168,6 +168,22 @@ export default function Home(){
             }}>
               Last updated: {new Date(stats.generated_at).toLocaleString()}
             </p>
+            <p style={{ 
+              margin: '8px 0 0 0', 
+              color: theme.textSecondary, 
+              fontSize: 12,
+              fontWeight: 400
+            }}>
+              Research led by <a href="https://gmri.org/about/staff/felipe-benavides/" style={{ color: 'inherit', textDecoration: 'underline' }}>Ivan Felipe Benavides</a>,, Postdoctorate Researcher at the Gulf of Maine Research Institute.
+            </p>
+            <p style={{ 
+              margin: '8px 0 0 0', 
+              color: theme.textSecondary, 
+              fontSize: 12,
+              fontWeight: 400
+            }}>
+              App developed by <a href="https://www.linkedin.com/in/justinmguthrie/" style={{ color: 'inherit', textDecoration: 'underline' }}>Justin Guthrie</a>,, GIS Specialist at Enodia, Research Associate at Northeastern University.
+            </p>
           </div>
           
           <div style={{ display: 'grid', gap: 20, paddingBottom: 40 }}>
