@@ -12,11 +12,11 @@ const ClassPerformanceMatrix = dynamic(() => import('@/components/ClassPerforman
 const SyntheticDataComparison = dynamic(() => import('@/components/SyntheticDataComparison'), { ssr: false })
 const UnifiedMLMatrix = dynamic(() => import('@/components/ClassPerformanceMatrix'), { ssr: false })
 
-type ViewType = 'performance' | 'unified-matrix' | 'synthetic' | 'class-network' | 'embedding-network' | 'grouped'
+type ViewType = 'embedding-universe' | 'performance' | 'unified-matrix' | 'synthetic' | 'class-network' | 'embedding-network' | 'grouped'
 
 export default function Conceptual(){
   const { data: stats, isLoading } = useFetch<Statistics>('statistics', '/api/statistics')
-  const [activeView, setActiveView] = useState<ViewType>('performance')
+  const [activeView, setActiveView] = useState<ViewType>('embedding-universe')
   const { darkMode } = useDarkMode()
 
   const theme = {
@@ -33,6 +33,7 @@ export default function Conceptual(){
   }
 
   const views = [
+    { id: 'embedding-universe', label: 'Embedding Universe', description: 'Interactive planet-moon visualization of land cover embeddings' },
     { id: 'performance', label: 'Performance Matrix', description: 'Individual class pair performance metrics in heatmaps' },
     { id: 'unified-matrix', label: 'Unified ML Matrix', description: 'All metrics for [Class] vs "All Other Classes"' },
     { id: 'synthetic', label: 'Synthetic Data (Armenia)', description: 'ML metrics by class for synthetic experiments' },
@@ -106,7 +107,21 @@ export default function Conceptual(){
           </div>
         </div>
 
-        <div style={{ background: theme.cardBg, padding: 24, borderRadius: 8, border: `1px solid ${theme.border}`, transition: 'all 0.3s ease' }}>
+        <div style={{ background: theme.cardBg, padding: activeView === 'embedding-universe' ? 0 : 24, borderRadius: 8, border: `1px solid ${theme.border}`, transition: 'all 0.3s ease' }}>
+          {activeView === 'embedding-universe' && (
+            <div style={{ width: '100%', height: '1100px', borderRadius: 8, overflow: 'hidden' }}>
+              <iframe
+                src="https://ryutja-justin-guthrie.shinyapps.io/land-cover-universe/"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  display: 'block'
+                }}
+                title="Land Cover Embedding Universe"
+              />
+            </div>
+          )}
           {activeView === 'performance' && <ClassPerformanceMatrix data={stats.unified_ml_matrix} />}
           {activeView === 'unified-matrix' && <UnifiedMLMatrix data={stats.unified_ml_matrix} />}
           {activeView === 'synthetic' && <SyntheticDataComparison data={stats.synthetic_class_stats} />}
@@ -123,6 +138,7 @@ export default function Conceptual(){
         <div style={{ marginTop: 24, padding: 20, background: theme.infoBg, borderRadius: 8, fontSize: 14, lineHeight: 1.6, border: `1px solid ${theme.border}`, transition: 'all 0.3s ease' }}>
           <strong style={{ display: 'block', marginBottom: 8, color: theme.infoText }}>Key Insights:</strong>
           <ul style={{ margin: 0, paddingLeft: 20, color: theme.textPrimary }}>
+            <li><strong>Embedding Universe:</strong> Interactive visualization showing exclusive (green) and shared (gold) embeddings for each land cover class</li>
             <li><strong>Performance Bar Graph:</strong> See precision/recall/F1/accuracy for each class pair</li>
             <li><strong>Synthetic Data Spotlight:</strong> Armenia experiments showing ML performance by class</li>
             <li><strong>Class Demand Network:</strong> Thicker edges = more tests between those classes</li>
