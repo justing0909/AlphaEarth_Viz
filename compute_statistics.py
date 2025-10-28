@@ -566,14 +566,14 @@ def compute_statistics():
         'model_performance': model_stats.to_dicts(),
         'country_distribution': country_stats.to_dicts(),
         'recent_experiments': recent_experiments.to_dicts(),
-        'embedding_importance_by_class': embedding_by_class.head(500).to_dicts(),
+        'embedding_importance_by_class': embedding_by_class.to_dicts(),
         
         # For conceptual.tsx
         'class_pair_performance': class_pair_performance.to_dicts(),
         'class_cooccurrence': class_cooccurrence.to_dicts(),
-        'embedding_cooccurrence': embedding_cooccurrence.head(1000).to_dicts(),
-        'embedding_cooccurrence_by_class': embedding_cooccurrence_by_class.head(1000).to_dicts(),
-        'embedding_rankings_by_class': embedding_rankings.head(2000).to_dicts(),
+        'embedding_cooccurrence': embedding_cooccurrence.to_dicts(),
+        'embedding_cooccurrence_by_class': embedding_cooccurrence_by_class.to_dicts(),
+        'embedding_rankings_by_class': embedding_rankings.to_dicts(),
         
         # NEW: Synthetic data analysis
         'synthetic_class_stats': synthetic_class_stats.to_dicts(),

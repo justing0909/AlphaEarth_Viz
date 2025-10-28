@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { CountryDistribution } from '@/lib/types'
+import { useDarkMode } from '../lib/useDarkMode'
+import { useFetch } from '../lib/useFetch'
+import { text } from 'stream/consumers'
 
 interface CountryMapProps {
   data: CountryDistribution[]
@@ -89,6 +92,20 @@ export default function CountryMap({ data }: CountryMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<L.Map | null>(null)
   const [geoJsonData, setGeoJsonData] = useState<any>(null)
+  
+  // enable proper styling for dark mode
+  const { darkMode, toggleDarkMode } = useDarkMode()
+
+  const theme = {
+    bg: darkMode ? '#0f0f0f' : '#fafafa',
+    cardBg: darkMode ? '#1a1a1a' : '#fff',
+    textPrimary: darkMode ? '#e8e8e8' : '#202124',
+    textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
+    border: darkMode ? '#333' : '#dadce0',
+    headerBg: darkMode ? '#242424' : '#f8f9fa',
+    tableBorder: darkMode ? '#2a2a2a' : '#f1f3f4',
+    accent: '#1967d2'
+  }
 
   useEffect(() => {
     fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson')
@@ -168,29 +185,6 @@ export default function CountryMap({ data }: CountryMapProps) {
           console.warn(`⚠️ No ISO code for country: ${country}`)
         }
       })
-
-      console.log('ISO data map keys:', Object.keys(isoDataMap))
-      console.log('ISO data map:', isoDataMap)
-      
-      // DEBUG: Check if UK data exists
-      console.log('=== UK Debug ===')
-      console.log('UK in countryDataMap?', countryDataMap['United Kingdom'])
-      console.log('GBR in isoDataMap?', isoDataMap['GBR'])
-      
-      // DEBUG: Check what GeoJSON has for UK
-      const ukFeature = geoJsonData.features.find((f: any) => 
-        f.properties.ISO_A3 === 'GBR' || 
-        f.properties.NAME === 'United Kingdom' ||
-        f.properties.ADMIN === 'United Kingdom'
-      )
-      console.log('UK GeoJSON feature:', ukFeature?.properties)
-      
-      // DEBUG: Check what GeoJSON has for USA
-      const usaFeature = geoJsonData.features.find((f: any) => 
-        f.properties.ISO_A3 === 'USA' || 
-        f.properties.NAME === 'United States'
-      )
-      console.log('USA GeoJSON feature:', usaFeature?.properties)
       
       // DEBUG: Show a few random GeoJSON features to understand structure
       console.log('Sample GeoJSON features (first 5):')
@@ -216,7 +210,7 @@ export default function CountryMap({ data }: CountryMapProps) {
           const fillColor = countryInfo.country === 'Armenia' ? '#9e9e9e' 
             : countryInfo.avg_accuracy > 0.9 ? '#34a853' 
             : countryInfo.avg_accuracy > 0.8 ? '#fbbc04' : '#ea4335'
-          const fillOpacity = countryInfo.country === 'Armenia' ? 0.5 
+          const fillOpacity = countryInfo.country === 'Armenia' ? 1
             : Math.max(0.5, Math.min(1, countryInfo.experiment_count / maxCount))
 
           return {
@@ -250,7 +244,7 @@ export default function CountryMap({ data }: CountryMapProps) {
         const color = countryInfo.country === 'Armenia' ? '#9e9e9e'
           : countryInfo.avg_accuracy > 0.9 ? '#34a853'
           : countryInfo.avg_accuracy > 0.8 ? '#fbbc04' : '#ea4335'
-        const fillOpacity = countryInfo.country === 'Armenia' ? 0.4 
+        const fillOpacity = countryInfo.country === 'Armenia' ? 1 
           : Math.max(0.4, Math.min(1, countryInfo.experiment_count / maxCount))
 
         console.log(`Adding circle marker for ${countryInfo.country}:`, { coords, color, count: countryInfo.experiment_count })
@@ -274,20 +268,19 @@ export default function CountryMap({ data }: CountryMapProps) {
   return (
     <div style={{ width: '100%' }}>
       <div ref={mapRef} style={{ height: '500px', width: '100%', borderRadius: '8px', border: '1px solid #e8eaed' }} />
-      <div style={{ marginTop: 12, fontSize: 11, color: '#5f6368' }}>
+      <div style={{ marginTop: 12, fontSize: 12, color: theme.textSecondary }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontWeight: 500 }}>Accuracy:</span>
             <span style={{ display: 'inline-block', width: 12, height: 12, background: '#34a853', marginRight: 2 }} />
-            <span style={{ fontSize: 10 }}>&gt;90%</span>
+            <span style={{ fontSize: 12 }}>&gt; 90%</span>
             <span style={{ display: 'inline-block', width: 12, height: 12, background: '#fbbc04', margin: '0 2px 0 8px' }} />
-            <span style={{ fontSize: 10 }}>80-90%</span>
+            <span style={{ fontSize: 12 }}>80-90%</span>
             <span style={{ display: 'inline-block', width: 12, height: 12, background: '#ea4335', margin: '0 2px 0 8px' }} />
-            <span style={{ fontSize: 10 }}>&lt;80%</span>
+            <span style={{ fontSize: 12 }}>&lt; 80%</span>
           </div>
-          <div style={{ color: '#80868b', fontSize: 11 }}>
-            • Opacity = experiment count • 
-            <span style={{ display: 'inline-block', width: 12, height: 12, background: '#9e9e9e', margin: '0 4px' }} />
+          <div style={{ color: theme.textSecondary, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 12, height: 12, background: theme.textSecondary, margin: '0 4px' }} />
             = Synthetic
           </div>
         </div>

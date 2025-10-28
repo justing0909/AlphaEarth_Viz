@@ -67,7 +67,7 @@ export default function Home(){
     return (
       <Layout darkMode={darkMode}>
         <div style={{ padding: 40, textAlign: 'center', color: theme.textSecondary }}>
-          Error loading statistics. Make sure to run: <code>npm run compute-stats</code>
+          Error loading statistics. Please try again.
         </div>
       </Layout>
     )
@@ -187,7 +187,7 @@ export default function Home(){
                   background: theme.headerBg,
                   transition: 'all 0.3s ease'
                 }}>
-                  <h2 style={{ fontSize: 13, fontWeight: 500, margin: 0, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
+                  <h2 style={{ fontSize: 15, fontWeight: 500, margin: 0, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
                     Recent Experiments
                   </h2>
                 </div>
@@ -195,11 +195,11 @@ export default function Home(){
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead>
                       <tr style={{ background: theme.cardBg, borderBottom: `1px solid ${theme.border}` }}>
-                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: theme.textSecondary, fontSize: 11 }}>Time</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: theme.textSecondary, fontSize: 11 }}>Date/Time</th>
                         <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: theme.textSecondary, fontSize: 11 }}>Country</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: theme.textSecondary, fontSize: 11 }}>Classes</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: theme.textSecondary, fontSize: 11 }}>Acc</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: theme.textSecondary, fontSize: 11 }}>Top 3</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: theme.textSecondary, fontSize: 11 }}>Classes Compared</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 500, color: theme.textSecondary, fontSize: 11 }}>Accuracy</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: theme.textSecondary, fontSize: 11 }}>Top 3 Embeddings</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -267,7 +267,7 @@ export default function Home(){
                 boxSizing: 'border-box',
                 transition: 'all 0.3s ease'
               }}>
-                <h2 style={{ fontSize: 13, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
+                <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
                   Model Performance
                 </h2>
                 <ModelAccuracyChart data={modelChartData} />
@@ -284,8 +284,8 @@ export default function Home(){
               boxSizing: 'border-box',
               transition: 'all 0.3s ease'
             }}>
-              <h2 style={{ fontSize: 14, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
-                Geographic Distribution
+              <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
+                Where are People Experimenting?
               </h2>
               <CountryMap data={stats.country_distribution} />
             </div>
@@ -300,8 +300,8 @@ export default function Home(){
               boxSizing: 'border-box',
               transition: 'all 0.3s ease'
             }}>
-              <h2 style={{ fontSize: 14, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
-                Embedding Importance ({stats.summary.total_models} models analyzed)
+              <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
+                Embedding Importance by Class
               </h2>
               {/* Pass the embedding importance data to your component */}
               <EmbeddingImportanceByClass data={stats.embedding_importance_by_class} />

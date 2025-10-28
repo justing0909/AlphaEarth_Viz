@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList } from 'recharts'
 import type { EmbeddingImportance } from '@/lib/types'
+import { useDarkMode } from '@/lib/useDarkMode'
+import { Thermometer } from 'lucide-react'
 
 interface EmbeddingImportanceByClassProps {
   data: EmbeddingImportance[]
@@ -8,6 +10,20 @@ interface EmbeddingImportanceByClassProps {
 }
 
 export default function EmbeddingImportanceByClass({ data, topN = 8 }: EmbeddingImportanceByClassProps){
+  // enable proper styling for dark mode
+    const { darkMode, toggleDarkMode } = useDarkMode()
+  
+    const theme = {
+      bg: darkMode ? '#0f0f0f' : '#fafafa',
+      cardBg: darkMode ? '#1a1a1a' : '#fff',
+      textPrimary: darkMode ? '#e8e8e8' : '#202124',
+      textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
+      border: darkMode ? '#333' : '#dadce0',
+      headerBg: darkMode ? '#242424' : '#f8f9fa',
+      tableBorder: darkMode ? '#2a2a2a' : '#f1f3f4',
+      accent: '#1967d2'
+    }
+  
   const processedData = useMemo(()=>{
     if(!data || data.length===0) return null
     
@@ -104,7 +120,7 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
   const positions = Array.from({ length: topEmbeddings.length }).map((_,i)=>i)
 
   const darkRed = '#bb0303ff'
-  const lightGray = '#e0e0e0'
+  const lightGray = '#b7b6b6ff'
 
   const compactMode = chartDataFull.length > 0 && visibleCount < chartDataFull.length
 
@@ -135,12 +151,12 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
             angle={-45} 
             textAnchor="end" 
             interval={0} 
-            tick={{ fontSize: 11, fill: '#5f6368' }}
+            tick={{ fontSize: 11, fill: theme.textSecondary }}
             height={70}
           />
           <YAxis 
-            label={{ value: 'Relative importance', angle: -90, position: 'insideLeft', style: { fill: '#5f6368', fontSize: 12 } }}
-            tick={{ fill: '#5f6368', fontSize: 11 }}
+            label={{ value: 'Relative importance', angle: -90, position: 'absolute', style: { fill: theme.textSecondary, fontSize: 12 }, offest: 10 }}
+            tick={{ fill: theme.textSecondary, fontSize: 11 }}
           />
           {positions.map((posIndex:number)=> (
             <Bar key={`pos${posIndex}`} dataKey={`pos${posIndex}`} radius={[2,2,0,0]} barSize={barSize}>
@@ -162,7 +178,7 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
                   const row = props && props.payload
                   const emb = row && row._embLabels && row._embLabels[posIndex] ? row._embLabels[posIndex] : ''
                   return emb
-                }} style={{fontSize:9, fill: '#5f6368'}} />
+                }} style={{fontSize:9, fill: theme.textSecondary}} />
               )}
             </Bar>
           ))}
@@ -187,8 +203,8 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
           <div style={{ color: '#5f6368' }}>{hover.emb}: {Number(hover.value).toFixed(4)}</div>
         </div>
       )}
-      <div style={{ marginTop: 12, fontSize: 11, color: '#5f6368', textAlign: 'center' }}>
-        Bars ordered left-to-right by descending importance within each embedding. Same color = same class pair.
+      <div style={{ marginTop: 12, fontSize: 11, color: theme.textSecondary, textAlign: 'center' }}>
+        Bars ordered left-to-right by descending importance within each embedding.
       </div>
     </div>
   )
