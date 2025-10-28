@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as d3 from 'd3'
 import type { EmbeddingCooccurrence, EmbeddingCooccurrenceByClass } from '@/lib/types'
+import { useDarkMode } from '@/lib/useDarkMode'
 
 interface EmbeddingCooccurrenceNetworkProps {
   cooccurrenceData: EmbeddingCooccurrence[]
@@ -8,6 +9,21 @@ interface EmbeddingCooccurrenceNetworkProps {
 }
 
 export default function EmbeddingCooccurrenceNetwork({ cooccurrenceData, cooccurrenceByClass }: EmbeddingCooccurrenceNetworkProps) {
+  
+  // enable proper styling for dark mode
+    const { darkMode, toggleDarkMode } = useDarkMode()
+  
+    const theme = {
+      bg: darkMode ? '#0f0f0f' : '#fafafa',
+      cardBg: darkMode ? '#1a1a1a' : '#fff',
+      textPrimary: darkMode ? '#e8e8e8' : '#202124',
+      textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
+      border: darkMode ? '#333' : '#dadce0',
+      headerBg: darkMode ? '#242424' : '#f8f9fa',
+      tableBorder: darkMode ? '#2a2a2a' : '#f1f3f4',
+      accent: '#1967d2'
+    }
+
   const svgRef = useRef<SVGSVGElement>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [clickFrozenEdge, setClickFrozenEdge] = useState<any>(null)
@@ -368,7 +384,7 @@ export default function EmbeddingCooccurrenceNetwork({ cooccurrenceData, cooccur
         </div>
       )}
       
-      <div style={{ marginTop: 12, fontSize: 13, color: '#666', textAlign: 'center' }}>
+      <div style={{ marginTop: 12, fontSize: 13, color: theme.textSecondary, textAlign: 'center' }}>
         Click node to focus • Click edge to freeze • Hover edge for details • Drag nodes • Scroll to zoom
         {selectedNode && <span style={{ marginLeft: 12, color: '#ef4444', fontWeight: 600 }}>Selected: {selectedNode}</span>}
         {clickFrozenEdge && <span style={{ marginLeft: 12, color: '#3b82f6', fontWeight: 600 }}>Edge Frozen</span>}

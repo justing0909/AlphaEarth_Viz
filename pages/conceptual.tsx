@@ -34,12 +34,11 @@ export default function Conceptual(){
 
   const views = [
     { id: 'embedding-universe', label: 'Embedding Universe', description: 'Interactive planet-moon visualization of land cover embeddings' },
-    { id: 'performance', label: 'Performance Matrix', description: 'Individual class pair performance metrics in heatmaps' },
-    { id: 'unified-matrix', label: 'Unified ML Matrix', description: 'All metrics for [Class] vs "All Other Classes"' },
-    { id: 'synthetic', label: 'Synthetic Data (Armenia)', description: 'ML metrics by class for synthetic experiments' },
-    { id: 'class-network', label: 'Class Demand', description: 'Which classes are tested together most often?' },
-    { id: 'embedding-network', label: 'Embedding Co-occurrence', description: 'Which embeddings appear together in top performers?' },
-    { id: 'grouped', label: 'Grouped Bar', description: 'Embedding importance comparison by class pair' }
+    { id: 'performance', label: 'Class Performance', description: 'Performance metrics by class when compared with all other classes' },
+    { id: 'synthetic', label: 'Synthetic Spotlight (Armenia)', description: 'Performance metrics by class only for synthetic experiments' },
+    { id: 'class-network', label: 'Class Demand Network', description: 'Which classes are tested together most often?' },
+    { id: 'embedding-network', label: 'Embedding Co-occurrence Network', description: 'Which embeddings appear together in top performers?' },
+    { id: 'grouped', label: 'Importance Bar Chart By Embedding', description: 'Embedding importance comparison by class pair' }
   ]
 
   if (isLoading || !stats) {
@@ -139,11 +138,11 @@ export default function Conceptual(){
           <strong style={{ display: 'block', marginBottom: 8, color: theme.infoText }}>Key Insights:</strong>
           <ul style={{ margin: 0, paddingLeft: 20, color: theme.textPrimary }}>
             <li><strong>Embedding Universe:</strong> Interactive visualization showing exclusive (green) and shared (gold) embeddings for each land cover class</li>
-            <li><strong>Performance Bar Graph:</strong> See precision/recall/F1/accuracy for each class pair</li>
-            <li><strong>Synthetic Data Spotlight:</strong> Armenia experiments showing ML performance by class</li>
-            <li><strong>Class Demand Network:</strong> Thicker edges = more tests between those classes</li>
-            <li><strong>Embedding Co-occurrence Network:</strong> Click edges to freeze the class pair distribution</li>
-            <li><strong>Importance Bar Chart By Embedding:</strong> Compare embedding importance rankings across tasks</li>
+            <li><strong>Class Performance:</strong> See precision/recall/F1/accuracy for each class pair</li>
+            <li><strong>Synthetic Spotlight (Armenia):</strong> Focus on synthetic experiments showing ML performance by class</li>
+            <li><strong>Class Demand Network:</strong> Ecplore the distribution of classification pairs</li>
+            <li><strong>Embedding Co-occurrence Network:</strong> Explore the distribution of embedding pairs during each classification experiment</li>
+            <li><strong>Importance Bar Chart By Embedding:</strong> Compare embedding importance rankings across classes</li>
           </ul>
         </div>
       </div>
