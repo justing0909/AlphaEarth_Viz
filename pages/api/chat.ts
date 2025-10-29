@@ -15,6 +15,24 @@ const VALID_CLASSES = [
   'Herb. wetland'
 ]
 
+// Map class names to codes for the notebook
+function mapClassToCode(className: string): number {
+  const mapping: Record<string, number> = {
+    'Tree cover': 10,
+    'Shrubland': 20,
+    'Grassland': 30,
+    'Cropland': 40,
+    'Built-up': 50,
+    'Bare/sparse': 60,
+    'Snow/ice': 70,
+    'Water': 80,
+    'Herb. wetland': 90,
+    'Mangroves': 95,
+    'Wetland': 90
+  }
+  return mapping[className] || 10
+}
+
 // Geocode location using Nominatim
 async function geocodeLocation(location: string): Promise<[number, number, number, number] | null> {
   try {
@@ -163,6 +181,7 @@ IMPORTANT:
     }
   }
 }
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Add health check for debugging
   if (req.method === 'GET') {
@@ -190,11 +209,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const bbox = await geocodeLocation(pendingComparison.location)
         
         if (bbox) {
+          const classACode = mapClassToCode(pendingComparison.class1)
+          const classBCode = mapClassToCode(pendingComparison.class2)
+          
+          // Format bbox for easy copy-paste
+          const bboxFormatted = `[${bbox[0].toFixed(4)}, ${bbox[1].toFixed(4)}, ${bbox[2].toFixed(4)}, ${bbox[3].toFixed(4)}]`
+          
+          const instructions = `Great! While unfortunately I can't complete this classification for you yet, I will recommend you fill out the Jupyter notebook.
+
+Here's what you need to enter in the notebook to accomplish your classification:
+
+📍 Region Selection:
+- Draw a rectangle on the map with these coordinates:
+  - Min Longitude: ${bbox[0].toFixed(4)}
+  - Min Latitude: ${bbox[1].toFixed(4)}
+  - Max Longitude: ${bbox[2].toFixed(4)}
+  - Max Latitude: ${bbox[3].toFixed(4)}
+
+🏞️ Land Cover Classes:
+- Class A: ${pendingComparison.class1} (Select code: ${classACode})
+- Class B: ${pendingComparison.class2} (Select code: ${classBCode})
+
+📊 Algorithm Settings:
+You can keep the default settings or adjust as needed.
+
+Once you've entered these values, click "RUN ANALYSIS" in the notebook!`
+
           return res.status(200).json({
-            message: `Great! Here's the ${pendingComparison.class1} vs ${pendingComparison.class2} classification for ${pendingComparison.location}.`,
+            message: instructions,
             confirmed: true,
             pendingComparison: pendingComparison,
-            bbox: bbox
+            bbox: bbox,
+            analysisParams: {
+              classACode,
+              classBCode,
+              bbox,
+              bboxFormatted,
+              location: pendingComparison.location
+            },
+            showNotebookButton: true
           })
         } else {
           return res.status(200).json({

@@ -27,6 +27,7 @@ export default function Chat(){
   const [lastConfirmedComparison, setLastConfirmedComparison] = useState<PendingComparison>(null)
   const [showMap, setShowMap] = useState(false)
   const [displayedComparison, setDisplayedComparison] = useState<PendingComparison>(null)
+  const [notebookLink, setNotebookLink] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { darkMode } = useDarkMode()
   
@@ -52,7 +53,6 @@ export default function Chat(){
     scrollToBottom()
   }, [messages])
 
-  // Initialize displayedComparison from lastConfirmedComparison if it has a bbox
   useEffect(() => {
     if (lastConfirmedComparison?.bbox && !displayedComparison?.bbox) {
       setDisplayedComparison(lastConfirmedComparison)
@@ -74,12 +74,11 @@ export default function Chat(){
 
     console.log('Sending to API:', {
       message: input,
-      pendingComparison: pendingComparison?.bbox ? null : pendingComparison, // Don't send if it has bbox (already confirmed)
+      pendingComparison: pendingComparison?.bbox ? null : pendingComparison,
       lastConfirmedComparison: lastConfirmedComparison
     })
 
     try {
-      // Call your API endpoint
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -102,21 +101,21 @@ export default function Chat(){
 
       setMessages(prev => [...prev, assistantMessage])
 
-      // Update pending comparison state
       if (data.pendingComparison !== undefined) {
         setPendingComparison(data.pendingComparison)
-        // Don't update displayedComparison - keep current map view during confirmation
       }
 
-      // Handle confirmation and show map
       if (data.confirmed && data.bbox) {
         const confirmed = data.pendingComparison
         const withBbox = { ...confirmed, bbox: data.bbox }
         setPendingComparison(withBbox)
         setLastConfirmedComparison(confirmed)
-        setDisplayedComparison(withBbox) // Update map NOW
+        setDisplayedComparison(withBbox)
+        
+        if (data.showNotebookButton) {
+          setNotebookLink('http://mybinder.org/v2/gh/FelipeBenavidesMz/Alpha-Earth-Land-Cover-Classifier/main?labpath=alpha_earth_app.ipynb')
+        }
       } else {
-        // Clear pending if no new pending in response
         if (!data.pendingComparison) {
           setPendingComparison(null)
         }
@@ -158,7 +157,6 @@ export default function Chat(){
           gap: 24,
           height: 'calc(100vh - 120px)'
         }}>
-          {/* Chat Panel */}
           <div style={{ 
             background: theme.cardBg,
             borderRadius: 8,
@@ -168,7 +166,6 @@ export default function Chat(){
             overflow: 'hidden',
             transition: 'all 0.3s ease'
           }}>
-            {/* Header */}
             <div style={{ 
               padding: '20px 24px',
               borderBottom: `1px solid ${theme.border}`,
@@ -187,7 +184,6 @@ export default function Chat(){
               }}>Ask about land cover classifications</p>
             </div>
 
-            {/* Messages */}
             <div style={{ 
               flex: 1,
               overflowY: 'auto',
@@ -213,27 +209,63 @@ export default function Chat(){
               )}
 
               {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
-                  }}
-                >
+                <div key={idx}>
                   <div
                     style={{
-                      maxWidth: '75%',
-                      padding: '12px 16px',
-                      borderRadius: 16,
-                      background: msg.role === 'user' ? theme.userBubble : theme.assistantBubble,
-                      color: msg.role === 'user' ? '#fff' : theme.textPrimary,
-                      fontSize: 14,
-                      lineHeight: 1.5,
-                      wordWrap: 'break-word'
+                      display: 'flex',
+                      justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start'
                     }}
                   >
-                    {msg.content}
+                    <div
+                      style={{
+                        maxWidth: '75%',
+                        padding: '12px 16px',
+                        borderRadius: 16,
+                        background: msg.role === 'user' ? theme.userBubble : theme.assistantBubble,
+                        color: msg.role === 'user' ? '#fff' : theme.textPrimary,
+                        fontSize: 14,
+                        lineHeight: 1.5,
+                        wordWrap: 'break-word',
+                        whiteSpace: 'pre-wrap'
+                      }}
+                    >
+                      {msg.content}
+                    </div>
                   </div>
+                  
+                  {msg.role === 'assistant' && notebookLink && idx === messages.length - 1 && (
+                    <div style={{ 
+                      display: 'flex',
+                      justifyContent: 'center',
+                      margin: '16px 0'
+                    }}>
+                      <a
+                        href={notebookLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="notebook-button"
+                        style={{
+                          padding: '10px 16px',
+                          background: theme.buttonBg,
+                          color: '#fff',
+                          borderRadius: 24,
+                          textDecoration: 'none',
+                          fontSize: 14,
+                          fontWeight: 500,
+                          display: 'inline-block',
+                          transition: 'background 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = theme.buttonHover
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = theme.buttonBg
+                        }}
+                      >
+                        🚀 Open AlphaEarth Jupyter Notebook
+                      </a>
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -267,7 +299,6 @@ export default function Chat(){
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
             <div style={{ 
               padding: 20,
               borderTop: `1px solid ${theme.border}`,
@@ -331,7 +362,6 @@ export default function Chat(){
             </div>
           </div>
 
-          {/* Map Panel - Always visible */}
           <div style={{ 
             background: theme.cardBg,
             borderRadius: 8,
@@ -405,7 +435,6 @@ export default function Chat(){
                   color: theme.textPrimary,
                   marginBottom: 16
                 }}>Map Preview</h2>
-                {/* Show last displayed map if available, otherwise default world view */}
                 <LeafletMap 
                   bounds={displayedComparison?.bbox ? [
                     [displayedComparison.bbox[1], displayedComparison.bbox[0]],
