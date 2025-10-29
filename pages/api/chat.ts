@@ -108,7 +108,7 @@ IMPORTANT:
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'llama-3.2-3b-preview',
+        model: 'groq/compound',
         messages: [
           {
             role: 'system',
@@ -175,5 +175,84 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  try {
+    const { message, pendingComparison, lastConfirmedComparison } = req.body
+
+    // If there's a pending comparison without bbox, this is a confirmation request
+    if (pendingComparison && !pendingComparison.bbox) {
+      const lowerMessage = message.toLowerCase()
+      
+      // Check for confirmation
+      if (lowerMessage.includes('yes') || lowerMessage.includes('correct') || lowerMessage.includes('right')) {
+        // Get bbox for the location
+        const bbox = await geocodeLocation(pendingComparison.location)
+        
+        if (bbox) {
+          return res.status(200).json({
+            message: `Great! Here's the ${pendingComparison.class1} vs ${pendingComparison.class2} classification for ${pendingComparison.location}.`,
+            confirmed: true,
+            pendingComparison: pendingComparison,
+            bbox: bbox
+          })
+        } else {
+          return res.status(200).json({
+            message: `I found the location but couldn't get the exact boundaries. Could you try a more specific location?`,
+            pendingComparison: null
+          })
+        }
+      }
+      
+      // Check for rejection
+      if (lowerMessage.includes('no') || lowerMessage.includes('wrong') || lowerMessage.includes('incorrect')) {
+        return res.status(200).json({
+          message: `I understand. Could you please rephrase what you're looking for?`,
+          pendingComparison: null
+        })
+      }
+    }
+
+    // Extract information from the query
+    const extracted = await processQuery(message, lastConfirmedComparison)
+
+    // If extraction failed
+    if (extracted.responseMessage) {
+      return res.status(200).json({
+        message: extracted.responseMessage,
+        pendingComparison: null
+      })
+    }
+
+    // Check if we have all required information
+    if (extracted.class1 && extracted.class2 && extracted.location) {
+      // We have everything - ask for confirmation
+      return res.status(200).json({
+        message: `I'll show you ${extracted.class1} vs ${extracted.class2} in ${extracted.location}. Is this correct?`,
+        pendingComparison: {
+          class1: extracted.class1,
+          class2: extracted.class2,
+          location: extracted.location
+        }
+      })
+    }
+
+    // Missing information - ask for what's missing
+    const missing: string[] = []
+    if (!extracted.class1) missing.push('first land cover class')
+    if (!extracted.class2) missing.push('second land cover class')
+    if (!extracted.location) missing.push('location')
+
+    return res.status(200).json({
+      message: `I need more information. Please specify: ${missing.join(', ')}.`,
+      pendingComparison: null
+    })
+
+  } catch (error) {
+    console.error('Chat API error:', error)
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: 'Sorry, something went wrong. Please try again.'
+    })
   }
 }
