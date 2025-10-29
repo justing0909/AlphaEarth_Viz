@@ -3,7 +3,6 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { HeatmapPoint } from '@/lib/types'
 import * as d3 from 'd3'
-import { useDarkMode } from '@/lib/useDarkMode'
 
 interface HeatmapInterpolatedProps {
   accuracyData: HeatmapPoint[]
@@ -22,22 +21,7 @@ export default function HeatmapInterpolated({
 }: HeatmapInterpolatedProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<L.Map | null>(null)
-  const layerGroupRef = useRef<L.LayerGroup | null>(null)
   const [currentMetric, setCurrentMetric] = useState<MetricType>('accuracy')
-
-    // enable proper styling for dark mode
-    const { darkMode, toggleDarkMode } = useDarkMode()
-
-    const theme = {
-        bg: darkMode ? '#0f0f0f' : '#fafafa',
-        cardBg: darkMode ? '#1a1a1a' : '#fff',
-        textPrimary: darkMode ? '#e8e8e8' : '#202124',
-        textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
-        border: darkMode ? '#333' : '#dadce0',
-        headerBg: darkMode ? '#242424' : '#f8f9fa',
-        tableBorder: darkMode ? '#2a2a2a' : '#f1f3f4',
-        accent: '#1967d2'
-    }
 
   // Initialize map once
   useEffect(() => {
@@ -52,9 +36,6 @@ export default function HeatmapInterpolated({
       opacity: 0.3
     }).addTo(map)
 
-    // Create a layer group for heatmap rectangles
-    layerGroupRef.current = L.layerGroup().addTo(map)
-
     return () => {
       if (mapInstance.current) {
         mapInstance.current.remove()
@@ -65,14 +46,16 @@ export default function HeatmapInterpolated({
 
   // Update heatmap when metric changes
   useEffect(() => {
-    console.log('HEATMAP UPDATE - RECTANGLE VERSION')
-    
-    if (!mapInstance.current || !layerGroupRef.current) return
+    if (!mapInstance.current) return
 
-    const layerGroup = layerGroupRef.current
+    const map = mapInstance.current
 
-    // Clear all layers in the group quickly
-    layerGroup.clearLayers()
+    // Remove existing heatmap layers
+    map.eachLayer((layer) => {
+      if (layer instanceof L.CircleMarker) {
+        map.removeLayer(layer)
+      }
+    })
 
     // Select data based on current metric
     const metricData = {
@@ -92,8 +75,6 @@ export default function HeatmapInterpolated({
       .map(d => d[metricKey] as number)
       .filter(v => v != null && !isNaN(v))
     
-    if (values.length === 0) return
-    
     const minValue = Math.min(...values)
     const maxValue = Math.max(...values)
 
@@ -110,60 +91,28 @@ export default function HeatmapInterpolated({
       return d3.interpolate('#f59e0b', '#ef4444')((normalized - 0.75) * 4)
     }
 
-    // Calculate the actual grid spacing from the data to avoid gaps/overlaps
-    const lats = metricData.map(d => d.grid_lat).filter(lat => lat != null && !isNaN(lat))
-    const lons = metricData.map(d => d.grid_lon).filter(lon => lon != null && !isNaN(lon))
-    
-    const sortedLats = Array.from(new Set(lats)).sort((a, b) => a - b)
-    const sortedLons = Array.from(new Set(lons)).sort((a, b) => a - b)
-    
-    // Find minimum spacing between grid points
-    let minLatSpacing = Infinity
-    let minLonSpacing = Infinity
-    
-    for (let i = 1; i < sortedLats.length; i++) {
-      const diff = sortedLats[i] - sortedLats[i-1]
-      if (diff > 0 && diff < minLatSpacing) minLatSpacing = diff
-    }
-    
-    for (let i = 1; i < sortedLons.length; i++) {
-      const diff = sortedLons[i] - sortedLons[i-1]
-      if (diff > 0 && diff < minLonSpacing) minLonSpacing = diff
-    }
-    
-    // Use the grid spacing as cell size (with small buffer to prevent gaps)
-    const cellSizeLat = minLatSpacing !== Infinity ? minLatSpacing * 1.01 : 1
-    const cellSizeLon = minLonSpacing !== Infinity ? minLonSpacing * 1.01 : 1
-
-    console.log(`Grid spacing - Lat: ${cellSizeLat.toFixed(4)}°, Lon: ${cellSizeLon.toFixed(4)}°`)
-
-    // Create all rectangles and add to layer group
+    // Add circle markers for each grid point
     metricData.forEach(point => {
       const value = point[metricKey] as number
       if (value == null || isNaN(value)) return
 
+      const radius = Math.sqrt(point.sample_count) * 3 // Size based on sample count
       const color = getColor(value)
-      
-      // Create rectangle bounds using calculated spacing
-      const bounds: L.LatLngBoundsExpression = [
-        [point.grid_lat - cellSizeLat/2, point.grid_lon - cellSizeLon/2],
-        [point.grid_lat + cellSizeLat/2, point.grid_lon + cellSizeLon/2]
-      ]
 
-      L.rectangle(bounds, {
+      L.circleMarker([point.grid_lat, point.grid_lon], {
+        radius: Math.max(5, Math.min(radius, 30)),
         fillColor: color,
         color: color,
-        weight: 0,
-        opacity: 0.85,
-        fillOpacity: 0.85,
-        interactive: true
+        weight: 1,
+        opacity: 0.7,
+        fillOpacity: 0.6
       })
       .bindPopup(`
         <strong>${currentMetric.toUpperCase()}: ${(value * 100).toFixed(1)}%</strong><br/>
         Location: [${point.grid_lat.toFixed(2)}, ${point.grid_lon.toFixed(2)}]<br/>
         Samples: ${point.sample_count}
       `)
-      .addTo(layerGroup)
+      .addTo(map)
     })
 
   }, [currentMetric, accuracyData, f1Data, recallData, precisionData])
@@ -213,10 +162,10 @@ export default function HeatmapInterpolated({
         border: '1px solid #e8eaed' 
       }} />
       
-      <div style={{ marginTop: 12, fontSize: 11, color: theme.textSecondary, textAlign: 'center' }}>
+      <div style={{ marginTop: 12, fontSize: 11, color: '#5f6368', textAlign: 'center' }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontWeight: 500 }}>Metric:</span>
+            <span style={{ fontWeight: 500 }}>Heat:</span>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ display: 'inline-block', width: 12, height: 12, background: '#3b82f6', marginRight: 2 }} />
               <span style={{ fontSize: 10, marginRight: 8 }}>Low</span>
@@ -226,8 +175,8 @@ export default function HeatmapInterpolated({
               <span style={{ fontSize: 10 }}>High</span>
             </div>
           </div>
-          <div style={{ color: theme.textSecondary, fontSize: 11 }}>
-            • Pixelated grid matches data resolution. Click cells for details.
+          <div style={{ color: '#80868b', fontSize: 11 }}>
+            • Circle size = sample count
           </div>
         </div>
       </div>

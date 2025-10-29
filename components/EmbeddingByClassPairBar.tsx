@@ -2,21 +2,112 @@ import { useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { EmbeddingRanking } from '@/lib/types'
+import { useDarkMode } from '../lib/useDarkMode'
 
 interface EmbeddingByClassPairBarProps {
-  data: EmbeddingRanking[]  // Changed from any[]
+  data: EmbeddingRanking[]
 }
 
 export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBarProps) {
   const [page, setPage] = useState(0)
   const embedsPerPage = 6
 
+  // enable proper styling for dark mode
+  const { darkMode, toggleDarkMode } = useDarkMode()
+  
+  const theme = {
+    bg: darkMode ? '#0f0f0f' : '#fafafa',
+    cardBg: darkMode ? '#1a1a1a' : '#fff',
+    textPrimary: darkMode ? '#e8e8e8' : '#202124',
+    textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
+    border: darkMode ? '#333' : '#dadce0',
+    headerBg: darkMode ? '#242424' : '#f8f9fa',
+    tableBorder: darkMode ? '#2a2a2a' : '#f1f3f4',
+    accent: '#1967d2'
+  }
+
   if (!data || data.length === 0) {
     return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No data available</div>
   }
 
-  // Get unique embeddings
-  const uniqueEmbeddings = Array.from(new Set(data.map(item => item.embedding))).sort()
+  // Normalize and merge "X vs All other classes" pairs
+  const normalizedData: EmbeddingRanking[] = []
+  const seenKeys = new Set<string>()
+
+  data.forEach(item => {
+  // Parse the class_pair string (format: "Class1 vs Class2")
+  const parts = item.class_pair.split(' vs ')
+  if (parts.length !== 2) return // Skip if not in expected format
+
+  const class1 = parts[0].trim()
+  const class2 = parts[1].trim()
+  
+  // Check if this is an "X vs All other classes" pair
+  const class1Lower = class1.toLowerCase()
+  const class2Lower = class2.toLowerCase()
+  const isAllOtherClasses1 = class1Lower.includes('all other classes')
+  const isAllOtherClasses2 = class2Lower.includes('all other classes')
+
+  // Skip if neither class is "all other classes"
+  if (!isAllOtherClasses1 && !isAllOtherClasses2) {
+    return
+  }
+
+  // Determine the specific class (not "all other classes")
+  const specificClass = isAllOtherClasses1 ? class2 : class1
+  
+  // Create normalized key: embedding + specific class
+  const normalizedKey = `${item.embedding}|||${specificClass.toLowerCase()}`
+
+  // Create normalized class pair string
+  const normalizedClassPair = `${specificClass} vs All other classes`
+
+  // Check if we've already seen this combination
+  const existingIndex = normalizedData.findIndex(d => {
+    const dParts = d.class_pair.split(' vs ')
+    if (dParts.length !== 2) return false
+    const dSpecificClass = dParts[0].toLowerCase().includes('all other classes') ? dParts[1] : dParts[0]
+    return `${d.embedding}|||${dSpecificClass.toLowerCase()}` === normalizedKey
+  })
+
+  if (existingIndex >= 0) {
+    // Already exists - take max importance
+    const existing = normalizedData[existingIndex]
+    if (item.avg_importance > existing.avg_importance) {
+      normalizedData[existingIndex] = {
+        ...item,
+        class_pair: normalizedClassPair
+      }
+    }
+  } else if (!seenKeys.has(normalizedKey)) {
+    // New entry
+    seenKeys.add(normalizedKey)
+    normalizedData.push({
+      ...item,
+      class_pair: normalizedClassPair
+    })
+  }
+})
+
+  // Use normalizedData instead of data from here on
+  const workingData = normalizedData
+
+  // Get unique embeddings sorted by max importance (descending)
+  const embeddingMaxImportance = new Map<string, number>()
+
+  workingData.forEach(item => {
+    const currentMax = embeddingMaxImportance.get(item.embedding) || 0
+    if (item.avg_importance > currentMax) {
+      embeddingMaxImportance.set(item.embedding, item.avg_importance)
+    }
+  })
+
+  const uniqueEmbeddings = Array.from(new Set(workingData.map(item => item.embedding)))
+    .sort((a, b) => {
+      const maxA = embeddingMaxImportance.get(a) || 0
+      const maxB = embeddingMaxImportance.get(b) || 0
+      return maxB - maxA // Descending order
+    })
   
   const totalPages = Math.ceil(uniqueEmbeddings.length / embedsPerPage)
   const startIdx = page * embedsPerPage
@@ -27,7 +118,7 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
   
   // Get all class pairs for color mapping
   const allClassPairs = new Set<string>()
-  data.forEach(item => allClassPairs.add(item.class_pair))
+  workingData.forEach(item => allClassPairs.add(item.class_pair))
   
   const classPairList = Array.from(allClassPairs)
   const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16']
@@ -37,12 +128,12 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
   })
 
   // Calculate global max for consistent Y-axis
-  const globalMaxImportance = Math.max(...data.map(item => item.avg_importance))
+  const globalMaxImportance = Math.max(...workingData.map(item => item.avg_importance))
   const yAxisMax = Math.ceil(globalMaxImportance / 10) * 10
 
   pageEmbeddings.forEach((embedding, embIdx) => {
     // Get all class pairs for this embedding, sorted by importance
-    const embeddingPairs = data
+    const embeddingPairs = workingData
       .filter(item => item.embedding === embedding)
       .sort((a, b) => b.avg_importance - a.avg_importance)
     
@@ -88,7 +179,7 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
   return (
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ fontSize: 14, color: '#666' }}>
+        <div style={{ fontSize: 14, color: theme.textSecondary }}>
           Showing embeddings {startIdx + 1}-{Math.min(startIdx + embedsPerPage, uniqueEmbeddings.length)} of {uniqueEmbeddings.length}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -137,13 +228,13 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis 
             dataKey="xPosition"
-            tick={{ fill: '#666', fontSize: 12, fontWeight: 600 }}
+            tick={{ fill: theme.textSecondary, fontSize: 12, fontWeight: 600 }}
             label={{ value: 'Embedding', position: 'insideBottom', offset: -10 }}
             tickFormatter={(value, index) => chartData[index]?.displayLabel || ''}
           />
           <YAxis 
             domain={[0, yAxisMax]}
-            tick={{ fill: '#666', fontSize: 11 }}
+            tick={{ fill: theme.textSecondary, fontSize: 11 }}
             label={{ value: 'Importance', angle: -90, position: 'insideLeft' }}
           />
           <Tooltip 
@@ -155,7 +246,7 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
                   <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 4, padding: 8 }}>
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>{data.embedding}</div>
                     <div style={{ color: data.color }}>{data.fullClassPair}</div>
-                    <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                    <div style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }}>
                       Importance: {data.importance.toFixed(3)}<br/>
                       Occurrences: {data.occurrences}<br/>
                       Rank: #{data.rank}
@@ -178,14 +269,14 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
         </BarChart>
       </ResponsiveContainer>
       
-      <div style={{ marginTop: 16, fontSize: 13, color: '#666', textAlign: 'center' }}>
+      <div style={{ marginTop: 16, fontSize: 13, color: theme.textSecondary, textAlign: 'center' }}>
         Bars ordered left-to-right by descending importance within each embedding. Same color = same class pair.
       </div>
       
       {/* Legend */}
-      <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: '8px 16px', justifyContent: 'center', fontSize: 12 }}>
+      <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: '8px 16px', justifyContent: 'center', fontSize: 12, color: theme.textSecondary }}>
         {classPairList.slice(0, 15).map(pair => {
-          const shortPair = pair.length > 30 ? pair.substring(0, 27) + '...' : pair
+          const shortPair = pair.length > 50 ? pair.substring(0, 47) + '...' : pair
           return (
             <div key={pair} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <div style={{ width: 12, height: 12, background: colorMap[pair], borderRadius: 2 }} />
