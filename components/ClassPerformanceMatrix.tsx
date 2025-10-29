@@ -26,8 +26,25 @@ export default function ClassPerformanceMatrix({ data }: UnifiedMLMatrixProps) {
     return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No data available</div>
   }
 
-  // Get sorted classes for y-axis
-  const classes = data.map(item => item.specific_class).sort()
+  // Define class order from bottom to top (complexity order)
+  const classOrder = [
+    'snow/ice',
+    'water',
+    'bare/sparse',
+    'moss/lichen',
+    'grassland',
+    'tree cover',
+    'shrubland',
+    'herb wetland',
+    'mangroves',
+    'cropland',
+    'built-up'
+  ]
+
+  // Get classes that exist in the data, ordered by complexity
+  const classes = classOrder.filter(cls => 
+    data.some(item => item.specific_class.toLowerCase() === cls.toLowerCase())
+  ).reverse()
 
   // Metrics for columns
   const metrics = ['F1 Score', 'Accuracy', 'Recall', 'Precision']
@@ -35,7 +52,7 @@ export default function ClassPerformanceMatrix({ data }: UnifiedMLMatrixProps) {
 
   // Build z-values matrix (rows = classes, columns = metrics)
   const zValues = classes.map(cls => {
-    const item = data.find(d => d.specific_class === cls)
+    const item = data.find(d => d.specific_class.toLowerCase() === cls.toLowerCase())
     return metricFields.map(field => {
       return item ? (item[field] as number) * 100 : 0 // Convert to percentage
     })

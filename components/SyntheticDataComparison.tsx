@@ -26,6 +26,24 @@ export default function SyntheticDataComparison({ data }: SyntheticDataCompariso
     return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No synthetic data available</div>
   }
 
+  // Define class order by complexity (least to most)
+  const classOrder = [
+    'snow/ice',
+    'water',
+    'bare/sparse',
+    'moss/lichen',
+    'grassland',
+    'tree cover',
+    'shrubland',
+    'herb wetland',
+    'mangroves',
+    'cropland',
+    'built-up'
+  ]
+
+  // Create a map for quick lookup of complexity order
+  const orderMap = new Map(classOrder.map((cls, idx) => [cls.toLowerCase(), idx]))
+
   // Transform for grouped bar chart
   const chartData = data.map(item => ({
     class: item.class_name,
@@ -33,8 +51,9 @@ export default function SyntheticDataComparison({ data }: SyntheticDataCompariso
     F1: item.avg_f1 * 100,
     Recall: item.avg_recall * 100,
     Precision: item.avg_precision * 100,
-    experiments: item.experiment_count
-  })).sort((a, b) => b.Accuracy - a.Accuracy)
+    experiments: item.experiment_count,
+    _order: orderMap.get(item.class_name.toLowerCase()) ?? 999
+  })).sort((a, b) => a._order - b._order)
 
   return (
     <div>
@@ -65,7 +84,7 @@ export default function SyntheticDataComparison({ data }: SyntheticDataCompariso
         </BarChart>
       </ResponsiveContainer>
       <div style={{ marginTop: 12, fontSize: 13, color: theme.textSecondary, textAlign: 'center' }}>
-        Synthetic data (Armenia) - ML metrics by class comparison vs &quot;All other classes&quot;
+        Synthetic data (Armenia) - ML metrics by class complexity (least to most complex, left to right)
       </div>
     </div>
   )

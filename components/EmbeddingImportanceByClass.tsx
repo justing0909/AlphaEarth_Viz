@@ -82,6 +82,10 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
       list.sort((a,b)=>b.val - a.val)
       const row: any = { class: cl, _embLabels: list.map(x=>x.emb) }
       list.forEach((it, idx)=> row[`pos${idx}`] = it.val)
+      
+      // Calculate max embedding importance for this class
+      row._maxImportance = Math.max(...list.map(x => x.val))
+      
       out.push(row)
     })
 
@@ -109,11 +113,8 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
 
   const chartData = useMemo(()=>{
     if(!chartDataFull || chartDataFull.length===0) return []
-    const ranked = chartDataFull.map((row:any)=>{
-      let sum = 0
-      for(let i=0;i<topEmbeddings.length;i++) sum += Number(row[`pos${i}`]||0)
-      return {...row, _sum: sum}
-    }).sort((a,b)=>b._sum - a._sum)
+    // Sort by maximum embedding importance (highest max on left)
+    const ranked = [...chartDataFull].sort((a,b)=> b._maxImportance - a._maxImportance)
     return ranked.slice(0, Math.max(1, visibleCount || ranked.length))
   },[chartDataFull, topEmbeddings, visibleCount])
   
@@ -204,7 +205,7 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
         </div>
       )}
       <div style={{ marginTop: 12, fontSize: 11, color: theme.textSecondary, textAlign: 'center' }}>
-        Bars ordered left-to-right by descending importance within each embedding.
+        Classes ordered by the strength of embedding to their respective class (highest on left). Bars within each class ordered by descending embedding importance.
       </div>
     </div>
   )
