@@ -33,11 +33,11 @@ export default function Conceptual(){
   }
 
   const views = [
-    { id: 'embedding-universe', label: 'Embedding Universe', description: 'Interactive planet-moon visualization of land cover embeddings' },
+    { id: 'embedding-universe', label: 'Embedding Universe', description: 'Interactive planet-moon visualization of land cover classes and their embeddings, showing both exclusive and shared embeddings.' },
     { id: 'performance', label: 'Class Performance', description: 'Performance metrics by class when compared with all other classes' },
-    { id: 'synthetic', label: 'Synthetic Spotlight (Armenia)', description: 'Performance metrics by class only for synthetic experiments' },
-    { id: 'class-network', label: 'Class Demand Network', description: 'Which classes are tested together most often?' },
-    { id: 'embedding-network', label: 'Embedding Co-occurrence Network', description: 'Which embeddings appear together in top performers?' },
+    { id: 'synthetic', label: 'Synthetic Spotlight (Armenia)', description: 'Performance metrics by class only for only synthetic experiments' },
+    { id: 'class-network', label: 'Class Demand Network', description: 'Which classes are tested together most often? Results measured by the number of experiments.' },
+    { id: 'embedding-network', label: 'Embedding Co-occurrence Network', description: 'Which embeddings appear together in top performers? Network shows embedding co-occurrences within the top 10 embeddings in each experiment.' },
     { id: 'grouped', label: 'Importance Bar Chart By Embedding', description: 'Embedding importance comparison by class pair' }
   ]
 

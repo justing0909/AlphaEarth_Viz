@@ -204,7 +204,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const lowerMessage = message.toLowerCase()
       
       // Check for confirmation
-      if (lowerMessage.includes('yes') || lowerMessage.includes('correct') || lowerMessage.includes('right')) {
+      if (lowerMessage.includes('yes') || lowerMessage.includes('correct') || lowerMessage.includes('right') || lowerMessage.includes('yep') || lowerMessage.includes('sure') || lowerMessage.includes('absolutely') || lowerMessage.includes('exactly') || lowerMessage.includes('yep!') || lowerMessage.includes('yeah') || lowerMessage.includes('yes!') || lowerMessage.includes('yea!') || lowerMessage.includes('yea') || lowerMessage.includes('yeah!')) {
         // Get bbox for the location
         const bbox = await geocodeLocation(pendingComparison.location)
         

@@ -174,11 +174,11 @@ def compute_statistics():
     
     print(f"Recent {len(recent_experiments)} experiments")
     
-    # 4. EMBEDDING IMPORTANCE BY CLASS PAIRS
+   # 4. EMBEDDING IMPORTANCE BY CLASS PAIRS
     print("\n=== 4. EMBEDDING IMPORTANCE BY CLASS PAIRS ===")
-    
+
     embedding_data = []
-    
+
     for idx, row in enumerate(filtered_df.iter_rows(named=True)):
         class_pair = f"{row['name_class1']} vs {row['name_class2']}"
         
@@ -193,9 +193,10 @@ def compute_statistics():
                     'country': row['country'],
                     'timestamp': row['timestamp']
                 })
-    
+
     embedding_importance_df = pl.DataFrame(embedding_data)
-    
+
+    # Original aggregation for descriptive view
     embedding_by_class = (
         embedding_importance_df
         .group_by(['class_pair', 'embedding'])
@@ -206,8 +207,60 @@ def compute_statistics():
         ])
         .sort('avg_importance', descending=True)
     )
-    
-    print(f"Found {len(embedding_by_class)} unique embedding-class combinations")
+
+    # NEW: Calculate top-2 frequency for probabilistic view
+    # First, we need to identify which embeddings are in top 2 for each experiment
+    top2_data = []
+
+    for idx, row in enumerate(filtered_df.iter_rows(named=True)):
+        class_pair = f"{row['name_class1']} vs {row['name_class2']}"
+        
+        # Get all embeddings with their importance for this experiment
+        emb_imp_pairs = []
+        for emb_col, imp_col in zip(embedding_cols[:10], importance_cols[:10]):
+            if row.get(emb_col) and row.get(imp_col):
+                emb_imp_pairs.append({
+                    'embedding': row[emb_col],
+                    'importance': row[imp_col]
+                })
+        
+        # Sort by importance and take top 2
+        emb_imp_pairs.sort(key=lambda x: x['importance'], reverse=True)
+        top_2_embeddings = emb_imp_pairs[:2]
+        
+        # Record each top-2 embedding
+        for emb_info in top_2_embeddings:
+            top2_data.append({
+                'class_pair': class_pair,
+                'class1': row['name_class1'],
+                'class2': row['name_class2'],
+                'embedding': emb_info['embedding'],
+                'country': row['country'],
+                'timestamp': row['timestamp']
+            })
+
+    top2_frequency_df = pl.DataFrame(top2_data)
+
+    # Aggregate top-2 frequencies
+    embedding_top2_frequency = (
+        top2_frequency_df
+        .group_by(['class_pair', 'embedding'])
+        .agg([
+            pl.len().alias('top2_frequency')
+        ])
+        .sort('top2_frequency', descending=True)
+    )
+
+    # Join the two together so we have both metrics
+    embedding_by_class_combined = (
+        embedding_by_class
+        .join(
+            embedding_top2_frequency,
+            on=['class_pair', 'embedding'],
+            how='left'
+        )
+        .fill_null(0)  # If an embedding never appeared in top 2, frequency is 0
+    )
     
     # 5. CLASS PAIR PERFORMANCE MATRIX
     print("\n=== 5. CLASS PAIR PERFORMANCE MATRIX ===")
@@ -329,7 +382,7 @@ def compute_statistics():
     print("\n=== 8. EMBEDDING IMPORTANCE RANKINGS BY CLASS PAIR ===")
     
     embedding_rankings = (
-        embedding_by_class
+        embedding_by_class_combined
         .sort(['embedding', 'avg_importance'], descending=[False, True])
         .with_columns([
             pl.col('avg_importance').rank('dense', descending=True).over('embedding').alias('rank')
@@ -566,7 +619,7 @@ def compute_statistics():
         'model_performance': model_stats.to_dicts(),
         'country_distribution': country_stats.to_dicts(),
         'recent_experiments': recent_experiments.to_dicts(),
-        'embedding_importance_by_class': embedding_by_class.to_dicts(),
+        'embedding_importance_by_class': embedding_by_class_combined.to_dicts(),
         
         # For conceptual.tsx
         'class_pair_performance': class_pair_performance.to_dicts(),

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev",
-    "prebuild": "mkdir -p data && curl -L -o data/statistics.json 'https://www.dropbox.com/scl/fi/1x1x0uelqnqfjq01fmew8/statistics.json?rlkey=09eg7n1o69a8zsqilkkmvrxj5&st=59jixbmd&dl=1'",
+    "prebuild": "mkdir -p data && curl -L -o data/statistics.json 'https://www.dropbox.com/scl/fi/ehvxkub9yfu5fgla3vnkb/statistics.json?rlkey=4clj1aeyzid6d7z9vd477xfwn&st=e2gbx8xm&dl=1'",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

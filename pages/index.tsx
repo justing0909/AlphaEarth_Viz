@@ -11,7 +11,6 @@ const CountryMap = dynamic(() => import('@/components/CountryMap'), { ssr: false
 const ModelAccuracyChart = dynamic(() => import('@/components/ModelAccuracyChart'), { ssr: false })
 
 export default function Home(){
-  // Fetch pre-computed statistics - MUCH faster!
   const { data: stats, isLoading, error } = useFetch<Statistics>('statistics', '/api/statistics')
   
   const { darkMode, toggleDarkMode } = useDarkMode()
@@ -73,7 +72,6 @@ export default function Home(){
     )
   }
 
-  // Transform model performance data for ModelAccuracyChart component
   const modelChartData = stats.model_performance.map(m => ({
     experiment_id: '',
     metric_name: 'accuracy',
@@ -306,7 +304,8 @@ export default function Home(){
               <CountryMap data={stats.country_distribution} />
             </div>
 
-            <div style={{ 
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+              <div style={{
               background: theme.cardBg, 
               borderRadius: 8, 
               border: `1px solid ${theme.border}`,
@@ -319,10 +318,84 @@ export default function Home(){
               <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
                 Embedding Importance by Class
               </h2>
-              {/* Pass the embedding importance data to your component */}
               <EmbeddingImportanceByClass data={stats.embedding_importance_by_class} />
             </div>
+
+            <div style={{ 
+              background: theme.cardBg, 
+              borderRadius: 8, 
+              border: `1px solid ${theme.border}`,
+              padding: 20,
+              width: '100%',
+              maxWidth: '100%',
+              boxSizing: 'border-box',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
+                Class Max. Embedding Importance Changes
+              </h2>
+              <div style={{ 
+                flex: 1, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                overflow: 'auto'
+              }}>
+                <img 
+                  src="/class_importance_sankey.svg" 
+                  alt="Position changes from descriptive to probabilistic view"
+                  style={{ 
+                    maxWidth: '100%', 
+                    height: 'auto',
+                    filter: darkMode ? 'invert(1) hue-rotate(180deg)' : 'none'
+                  }}
+                />
+              </div>
+              <div style={{ 
+                marginTop: 12, 
+                fontSize: 11, 
+                color: theme.textSecondary,
+                textAlign: 'center'
+              }}>
+                Flow of embedding positions from Descriptive to Probabilistic view
+              </div>
+            </div>
           </div>
+
+          <div style={{ 
+            background: theme.cardBg, 
+            borderRadius: 8, 
+            border: `1px solid ${theme.border}`,
+            padding: 20,
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            transition: 'all 0.3s ease'
+          }}>
+            <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
+              Reducing Time Complexity By Embedding Prioritization
+            </h2>
+            <img 
+              src="/blue-green-bar-graph.jpeg" 
+              alt="Description"
+              style={{ 
+                width: '100%',
+                height: 'auto',
+                filter: darkMode ? 'invert(1) hue-rotate(180deg)' : 'none'
+              }}
+            />
+            <div style={{ 
+                marginTop: 12, 
+                fontSize: 11, 
+                color: theme.textSecondary,
+                textAlign: 'center'
+              }}>
+                Green bars indicate the minimum embeddings required to reach 98% of accuracy per class.
+              </div>
+          </div>
+        </div>
         </div>
       </div>
     </Layout>

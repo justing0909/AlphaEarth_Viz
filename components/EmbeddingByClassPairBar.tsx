@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { EmbeddingRanking } from '@/lib/types'
@@ -10,10 +10,10 @@ interface EmbeddingByClassPairBarProps {
 
 export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBarProps) {
   const [page, setPage] = useState(0)
+  const [viewMode, setViewMode] = useState<'descriptive' | 'probabilistic'>('descriptive')
   const embedsPerPage = 6
 
-  // enable proper styling for dark mode
-  const { darkMode, toggleDarkMode } = useDarkMode()
+  const { darkMode } = useDarkMode()
   
   const theme = {
     bg: darkMode ? '#0f0f0f' : '#fafafa',
@@ -26,73 +26,112 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
     accent: '#1967d2'
   }
 
+  // Normalize and merge "X vs All other classes" pairs
+  const normalizedData = useMemo(() => {
+    if (!data || data.length === 0) return []
+    
+    const normalized: EmbeddingRanking[] = []
+    const seenKeys = new Set<string>()
+
+    data.forEach(item => {
+      const parts = item.class_pair.split(' vs ')
+      if (parts.length !== 2) return
+
+      const class1 = parts[0].trim()
+      const class2 = parts[1].trim()
+      
+      const class1Lower = class1.toLowerCase()
+      const class2Lower = class2.toLowerCase()
+      const isAllOtherClasses1 = class1Lower.includes('all other classes')
+      const isAllOtherClasses2 = class2Lower.includes('all other classes')
+
+      if (!isAllOtherClasses1 && !isAllOtherClasses2) {
+        return
+      }
+
+      const specificClass = isAllOtherClasses1 ? class2 : class1
+      const normalizedKey = `${item.embedding}|||${specificClass.toLowerCase()}`
+      const normalizedClassPair = `${specificClass} vs All other classes`
+
+      const existingIndex = normalized.findIndex(d => {
+        const dParts = d.class_pair.split(' vs ')
+        if (dParts.length !== 2) return false
+        const dSpecificClass = dParts[0].toLowerCase().includes('all other classes') ? dParts[1] : dParts[0]
+        return `${d.embedding}|||${dSpecificClass.toLowerCase()}` === normalizedKey
+      })
+
+      if (existingIndex >= 0) {
+        const existing = normalized[existingIndex]
+        if (item.avg_importance > existing.avg_importance) {
+          normalized[existingIndex] = {
+            ...item,
+            class_pair: normalizedClassPair
+          }
+        }
+      } else if (!seenKeys.has(normalizedKey)) {
+        seenKeys.add(normalizedKey)
+        normalized.push({
+          ...item,
+          class_pair: normalizedClassPair
+        })
+      }
+    })
+    
+    return normalized
+  }, [data])
+
+  const workingData = normalizedData
+
+  // Calculate probabilistic frequencies (normalized top2_frequency)
+  const probabilisticData = useMemo(() => {
+    if (workingData.length === 0) return []
+    
+    const frequencyMap = new Map<string, Map<string, number>>()
+    
+    workingData.forEach(item => {
+      if (!frequencyMap.has(item.class_pair)) {
+        frequencyMap.set(item.class_pair, new Map())
+      }
+      const embMap = frequencyMap.get(item.class_pair)!
+      if (!embMap.has(item.embedding)) {
+        embMap.set(item.embedding, 0)
+      }
+      embMap.set(item.embedding, embMap.get(item.embedding)! + (item.top2_frequency || 0))
+    })
+
+    const normalized: EmbeddingRanking[] = []
+    Array.from(frequencyMap.entries()).forEach(([classPair, embMap]) => {
+      const totalCount = Array.from(embMap.values()).reduce((sum, count) => sum + count, 0)
+      
+      Array.from(embMap.entries()).forEach(([embedding, freq]) => {
+        const normalizedFreq = totalCount > 0 ? freq / totalCount : 0
+        
+        const originalItem = workingData.find(d => d.class_pair === classPair && d.embedding === embedding)
+        
+        normalized.push({
+          class_pair: classPair,
+          embedding: embedding,
+          avg_importance: normalizedFreq,
+          max_importance: normalizedFreq,
+          occurrences: freq,
+          rank: originalItem?.rank || 0,
+          top2_frequency: freq
+        })
+      })
+    })
+
+    return normalized
+  }, [workingData])
+
+  // NOW do the early return check AFTER all hooks
   if (!data || data.length === 0) {
     return <div style={{ padding: 20, textAlign: 'center', color: '#999' }}>No data available</div>
   }
 
-  // Normalize and merge "X vs All other classes" pairs
-  const normalizedData: EmbeddingRanking[] = []
-  const seenKeys = new Set<string>()
+  // Use the appropriate data based on view mode
+  const currentData = viewMode === 'descriptive' ? workingData : probabilisticData
 
-  data.forEach(item => {
-  // Parse the class_pair string (format: "Class1 vs Class2")
-  const parts = item.class_pair.split(' vs ')
-  if (parts.length !== 2) return // Skip if not in expected format
-
-  const class1 = parts[0].trim()
-  const class2 = parts[1].trim()
-  
-  // Check if this is an "X vs All other classes" pair
-  const class1Lower = class1.toLowerCase()
-  const class2Lower = class2.toLowerCase()
-  const isAllOtherClasses1 = class1Lower.includes('all other classes')
-  const isAllOtherClasses2 = class2Lower.includes('all other classes')
-
-  // Skip if neither class is "all other classes"
-  if (!isAllOtherClasses1 && !isAllOtherClasses2) {
-    return
-  }
-
-  // Determine the specific class (not "all other classes")
-  const specificClass = isAllOtherClasses1 ? class2 : class1
-  
-  // Create normalized key: embedding + specific class
-  const normalizedKey = `${item.embedding}|||${specificClass.toLowerCase()}`
-
-  // Create normalized class pair string
-  const normalizedClassPair = `${specificClass} vs All other classes`
-
-  // Check if we've already seen this combination
-  const existingIndex = normalizedData.findIndex(d => {
-    const dParts = d.class_pair.split(' vs ')
-    if (dParts.length !== 2) return false
-    const dSpecificClass = dParts[0].toLowerCase().includes('all other classes') ? dParts[1] : dParts[0]
-    return `${d.embedding}|||${dSpecificClass.toLowerCase()}` === normalizedKey
-  })
-
-  if (existingIndex >= 0) {
-    // Already exists - take max importance
-    const existing = normalizedData[existingIndex]
-    if (item.avg_importance > existing.avg_importance) {
-      normalizedData[existingIndex] = {
-        ...item,
-        class_pair: normalizedClassPair
-      }
-    }
-  } else if (!seenKeys.has(normalizedKey)) {
-    // New entry
-    seenKeys.add(normalizedKey)
-    normalizedData.push({
-      ...item,
-      class_pair: normalizedClassPair
-    })
-  }
-})
-
-  // Use normalizedData instead of data from here on
-  const workingData = normalizedData
-
-  // Get unique embeddings sorted by max importance (descending)
+  // Get unique embeddings sorted by max importance (descending) from DESCRIPTIVE data only
   const embeddingMaxImportance = new Map<string, number>()
 
   workingData.forEach(item => {
@@ -106,7 +145,7 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
     .sort((a, b) => {
       const maxA = embeddingMaxImportance.get(a) || 0
       const maxB = embeddingMaxImportance.get(b) || 0
-      return maxB - maxA // Descending order
+      return maxB - maxA
     })
   
   const totalPages = Math.ceil(uniqueEmbeddings.length / embedsPerPage)
@@ -116,9 +155,8 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
   // Build chart data
   const chartData: any[] = []
   
-  // Get all class pairs for color mapping
   const allClassPairs = new Set<string>()
-  workingData.forEach(item => allClassPairs.add(item.class_pair))
+  currentData.forEach(item => allClassPairs.add(item.class_pair))
   
   const classPairList = Array.from(allClassPairs)
   const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#06b6d4', '#84cc16']
@@ -127,13 +165,13 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
     colorMap[pair] = colors[idx % colors.length]
   })
 
-  // Calculate global max for consistent Y-axis
-  const globalMaxImportance = Math.max(...workingData.map(item => item.avg_importance))
-  const yAxisMax = Math.ceil(globalMaxImportance / 10) * 10
+  const globalMaxImportance = Math.max(...currentData.map(item => item.avg_importance))
+  const yAxisMax = viewMode === 'probabilistic'
+          ? 1 // for probabilistic, max is 1
+          : Math.ceil(globalMaxImportance * 1.1 * 1000) / 1000 // for descriptive, round up to nearest 10
 
   pageEmbeddings.forEach((embedding, embIdx) => {
-    // Get all class pairs for this embedding, sorted by importance
-    const embeddingPairs = workingData
+    const embeddingPairs = currentData
       .filter(item => item.embedding === embedding)
       .sort((a, b) => b.avg_importance - a.avg_importance)
     
@@ -157,7 +195,6 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
       })
     })
     
-    // Add spacers between embeddings
     if (embIdx < pageEmbeddings.length - 1) {
       for (let i = 0; i < 2; i++) {
         chartData.push({
@@ -178,6 +215,42 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
 
   return (
     <div style={{ width: '100%' }}>
+      {/* View mode toggle */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, gap: 8 }}>
+        <button
+          onClick={() => setViewMode('descriptive')}
+          style={{
+            padding: '8px 16px',
+            background: viewMode === 'descriptive' ? theme.accent : theme.cardBg,
+            color: viewMode === 'descriptive' ? '#fff' : theme.textPrimary,
+            border: `1px solid ${theme.border}`,
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 500,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Descriptive
+        </button>
+        <button
+          onClick={() => setViewMode('probabilistic')}
+          style={{
+            padding: '8px 16px',
+            background: viewMode === 'probabilistic' ? theme.accent : theme.cardBg,
+            color: viewMode === 'probabilistic' ? '#fff' : theme.textPrimary,
+            border: `1px solid ${theme.border}`,
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 500,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Probabilistic
+        </button>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div style={{ fontSize: 14, color: theme.textSecondary }}>
           Showing embeddings {startIdx + 1}-{Math.min(startIdx + embedsPerPage, uniqueEmbeddings.length)} of {uniqueEmbeddings.length}
@@ -235,7 +308,11 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
           <YAxis 
             domain={[0, yAxisMax]}
             tick={{ fill: theme.textSecondary, fontSize: 11 }}
-            label={{ value: 'Importance', angle: -90, position: 'insideLeft' }}
+            label={{ 
+              value: viewMode === 'descriptive' ? 'Importance' : 'Normalized Frequency', 
+              angle: -90, 
+              position: 'insideLeft' 
+            }}
           />
           <Tooltip 
             content={({ active, payload }) => {
@@ -247,9 +324,9 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>{data.embedding}</div>
                     <div style={{ color: data.color }}>{data.fullClassPair}</div>
                     <div style={{ fontSize: 12, color: theme.textSecondary, marginTop: 4 }}>
-                      Importance: {data.importance.toFixed(3)}<br/>
+                      {viewMode === 'descriptive' ? 'Importance' : 'Normalized Freq'}: {data.importance.toFixed(viewMode === 'descriptive' ? 3 : 3)}<br/>
                       Occurrences: {data.occurrences}<br/>
-                      Rank: #{data.rank}
+                      {viewMode === 'descriptive' && `Rank: #${data.rank}`}
                     </div>
                   </div>
                 )
@@ -257,7 +334,7 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
               return null
             }}
           />
-          <Bar dataKey="importance" name="Importance">
+          <Bar dataKey="importance" name={viewMode === 'descriptive' ? 'Importance' : 'Frequency'}>
             {chartData.map((entry, index) => (
               <Cell 
                 key={`cell-${index}`} 
@@ -270,7 +347,10 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
       </ResponsiveContainer>
       
       <div style={{ marginTop: 16, fontSize: 13, color: theme.textSecondary, textAlign: 'center' }}>
-        Bars ordered left-to-right by descending importance within each embedding. Same color = same class pair.
+        {viewMode === 'descriptive' 
+          ? 'Bars ordered left-to-right by descending importance within each embedding. Same color = same class pair.'
+          : 'Bars show normalized frequency of embeddings appearing in top-2 positions. Values represent proportion of experiments where embedding ranked in top 2.'
+        }
       </div>
       
       {/* Legend */}

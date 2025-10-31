@@ -2,7 +2,6 @@ import React, { useMemo, useState, useEffect } from 'react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList } from 'recharts'
 import type { EmbeddingImportance } from '@/lib/types'
 import { useDarkMode } from '@/lib/useDarkMode'
-import { Thermometer } from 'lucide-react'
 
 interface EmbeddingImportanceByClassProps {
   data: EmbeddingImportance[]
@@ -10,28 +9,26 @@ interface EmbeddingImportanceByClassProps {
 }
 
 export default function EmbeddingImportanceByClass({ data, topN = 8 }: EmbeddingImportanceByClassProps){
-  // enable proper styling for dark mode
-    const { darkMode, toggleDarkMode } = useDarkMode()
+  const { darkMode } = useDarkMode()
+  const [viewMode, setViewMode] = useState<'descriptive' | 'probabilistic'>('descriptive')
   
-    const theme = {
-      bg: darkMode ? '#0f0f0f' : '#fafafa',
-      cardBg: darkMode ? '#1a1a1a' : '#fff',
-      textPrimary: darkMode ? '#e8e8e8' : '#202124',
-      textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
-      border: darkMode ? '#333' : '#dadce0',
-      headerBg: darkMode ? '#242424' : '#f8f9fa',
-      tableBorder: darkMode ? '#2a2a2a' : '#f1f3f4',
-      accent: '#1967d2'
-    }
+  const theme = {
+    bg: darkMode ? '#0f0f0f' : '#fafafa',
+    cardBg: darkMode ? '#1a1a1a' : '#fff',
+    textPrimary: darkMode ? '#e8e8e8' : '#202124',
+    textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
+    border: darkMode ? '#333' : '#dadce0',
+    headerBg: darkMode ? '#242424' : '#f8f9fa',
+    tableBorder: darkMode ? '#2a2a2a' : '#f1f3f4',
+    accent: '#1967d2'
+  }
   
   const processedData = useMemo(()=>{
     if(!data || data.length===0) return null
     
-    // Group by class_pair, then by embedding
     const classPairMap = new Map<string, Map<string, number[]>>()
     
     data.forEach(item => {
-      // Extract the specific class (not "All other classes")
       const parts = item.class_pair.split(' vs ')
       const specificClass = parts[0] === 'All other classes' ? parts[1] : parts[0]
       
@@ -46,9 +43,6 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
       embMap.get(item.embedding)!.push(item.avg_importance)
     })
 
-    console.log('Classes found:', Array.from(classPairMap.keys()))
-
-    // Get top embeddings overall
     const embeddingSet = new Set<string>()
     Array.from(classPairMap.values()).forEach(m => Array.from(m.keys()).forEach(k => embeddingSet.add(k)))
     
@@ -70,8 +64,7 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
       .sort((a,b)=>b.mean-a.mean)
     const topEmbeddings = embMeanOverall.slice(0, topN).map(d=>d.id)
 
-    // Build chart rows per class
-    const out: any[] = []
+    const descriptiveOut: any[] = []
     Array.from(classPairMap.entries()).forEach(([cl, m])=>{
       const list: {emb:string; val:number}[] = []
       topEmbeddings.forEach(emb=>{
@@ -82,20 +75,67 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
       list.sort((a,b)=>b.val - a.val)
       const row: any = { class: cl, _embLabels: list.map(x=>x.emb) }
       list.forEach((it, idx)=> row[`pos${idx}`] = it.val)
-      
-      // Calculate max embedding importance for this class
       row._maxImportance = Math.max(...list.map(x => x.val))
-      
-      out.push(row)
+      descriptiveOut.push(row)
     })
 
-    return { out, topEmbeddings }
+    return { descriptiveOut, topEmbeddings, classPairMap }
   }, [data, topN])
+
+  const probabilisticData = useMemo(() => {
+  if (!data || data.length === 0 || !processedData) return null
+
+  const topEmbeddings = processedData.topEmbeddings
+
+  // Build frequency map from top2_frequency field
+  const frequencyMap = new Map<string, Map<string, number>>()
+  
+  data.forEach(item => {
+    const parts = item.class_pair.split(' vs ')
+    const specificClass = parts[0] === 'All other classes' ? parts[1] : parts[0]
+    
+    if (!frequencyMap.has(specificClass)) {
+      frequencyMap.set(specificClass, new Map())
+    }
+    
+    const embMap = frequencyMap.get(specificClass)!
+    
+    if (!embMap.has(item.embedding)) {
+      embMap.set(item.embedding, 0)
+    }
+    
+    // Use the top2_frequency field instead of counting occurrences
+    embMap.set(item.embedding, embMap.get(item.embedding)! + item.top2_frequency)
+  })
+
+  const probabilisticOut: any[] = []
+  Array.from(frequencyMap.entries()).forEach(([cl, freqMap]) => {
+    const totalCount = Array.from(freqMap.values()).reduce((sum, count) => sum + count, 0)
+    
+    const list: {emb: string; freq: number; normalized: number}[] = []
+    topEmbeddings.forEach(emb => {
+      const freq = freqMap.get(emb) || 0
+      const normalized = totalCount > 0 ? freq / totalCount : 0
+      list.push({ emb, freq, normalized })
+    })
+    
+    list.sort((a, b) => b.normalized - a.normalized)
+    
+    const row: any = { class: cl, _embLabels: list.map(x => x.emb) }
+    list.forEach((it, idx) => row[`pos${idx}`] = it.normalized)
+    row._maxFrequency = Math.max(...list.map(x => x.normalized))
+    
+    probabilisticOut.push(row)
+  })
+
+  return probabilisticOut
+}, [data, processedData])
+
 
   const [hover, setHover] = useState<{ cls?: string; pos?: number; value?: number; emb?: string; x?: number; y?: number } | null>(null)
   const [visibleCount, setVisibleCount] = useState<number>(0)
 
-  const chartDataFull = useMemo(()=> processedData?.out ?? [], [processedData])
+  const currentData = viewMode === 'descriptive' ? processedData?.descriptiveOut ?? [] : probabilisticData ?? []
   const topEmbeddings = useMemo(()=> processedData?.topEmbeddings ?? [], [processedData])
 
   useEffect(()=>{
@@ -109,40 +149,75 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
     recompute()
     window.addEventListener('resize', recompute)
     return ()=> window.removeEventListener('resize', recompute)
-  },[topEmbeddings.length, chartDataFull.length])
+  },[topEmbeddings.length, currentData.length])
 
   const chartData = useMemo(()=>{
-    if(!chartDataFull || chartDataFull.length===0) return []
-    // Sort by maximum embedding importance (highest max on left)
-    const ranked = [...chartDataFull].sort((a,b)=> b._maxImportance - a._maxImportance)
-    return ranked.slice(0, Math.max(1, visibleCount || ranked.length))
-  },[chartDataFull, topEmbeddings, visibleCount])
+  if(!currentData || currentData.length===0) return []
+  // Always sort by descriptive importance, regardless of view mode
+  const ranked = [...currentData].sort((a,b)=> b._maxImportance - a._maxImportance)
+  return ranked.slice(0, Math.max(1, visibleCount || ranked.length))
+},[currentData, visibleCount])  // Removed viewMode from dependencies
   
   const positions = Array.from({ length: topEmbeddings.length }).map((_,i)=>i)
 
   const darkRed = '#bb0303ff'
   const lightGray = '#b7b6b6ff'
 
-  const compactMode = chartDataFull.length > 0 && visibleCount < chartDataFull.length
+  const compactMode = currentData.length > 0 && visibleCount < currentData.length
 
   const barSize = useMemo(()=>{
     if (typeof window === 'undefined') return compactMode ? 6 : 12
     const vw = window.innerWidth
-    const groups = Math.max(1, visibleCount || chartDataFull.length || 1)
+    const groups = Math.max(1, visibleCount || currentData.length || 1)
     const perGroup = Math.floor(vw / groups)
     const bs = Math.max(3, Math.floor(perGroup / Math.max(1, topEmbeddings.length)))
     return compactMode ? Math.max(3, Math.min(bs, 8)) : Math.max(4, Math.min(bs, 18))
-  }, [visibleCount, topEmbeddings.length, compactMode, chartDataFull.length])
+  }, [visibleCount, topEmbeddings.length, compactMode, currentData.length])
 
-  if(!processedData || !processedData.out || processedData.out.length===0 || chartData.length===0) {
+  if(!processedData || !processedData.descriptiveOut || processedData.descriptiveOut.length===0 || chartData.length===0) {
     return <div>No embedding importance data available.</div>
   }
 
   const groupWidthPx = Math.max(20, topEmbeddings.length * barSize + 4)
-  const requiredWidth = Math.max(300, (visibleCount || chartDataFull.length) * groupWidthPx)
+  const requiredWidth = Math.max(300, (visibleCount || currentData.length) * groupWidthPx)
 
   return (
     <div style={{width:'100%', maxWidth:'100%', overflow: 'hidden'}}>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16, gap: 8 }}>
+        <button
+          onClick={() => setViewMode('descriptive')}
+          style={{
+            padding: '8px 16px',
+            background: viewMode === 'descriptive' ? theme.accent : theme.cardBg,
+            color: viewMode === 'descriptive' ? '#fff' : theme.textPrimary,
+            border: `1px solid ${theme.border}`,
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 500,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Descriptive
+        </button>
+        <button
+          onClick={() => setViewMode('probabilistic')}
+          style={{
+            padding: '8px 16px',
+            background: viewMode === 'probabilistic' ? theme.accent : theme.cardBg,
+            color: viewMode === 'probabilistic' ? '#fff' : theme.textPrimary,
+            border: `1px solid ${theme.border}`,
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 500,
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Probabilistic
+        </button>
+      </div>
+
       <div style={{width: '100%', maxWidth: requiredWidth, margin: '0 auto'}}>
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={chartData} margin={{ top: 6, right: 6, left: 6, bottom: 80 }} barGap={compactMode?0:1} barCategoryGap={compactMode? '0%':'2%'}>
@@ -156,7 +231,13 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
             height={70}
           />
           <YAxis 
-            label={{ value: 'Relative importance', angle: -90, position: 'absolute', style: { fill: theme.textSecondary, fontSize: 12 }, offest: 10 }}
+            label={{ 
+              value: viewMode === 'descriptive' ? 'Relative importance' : 'Normalized frequency', 
+              angle: -90, 
+              position: 'absolute', 
+              style: { fill: theme.textSecondary, fontSize: 12 }, 
+              offset: 10 
+            }}
             tick={{ fill: theme.textSecondary, fontSize: 11 }}
           />
           {positions.map((posIndex:number)=> (
@@ -201,11 +282,16 @@ export default function EmbeddingImportanceByClass({ data, topN = 8 }: Embedding
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
         }}>
           <div style={{fontWeight:500, color: '#202124'}}>{hover.cls}</div>
-          <div style={{ color: '#5f6368' }}>{hover.emb}: {Number(hover.value).toFixed(4)}</div>
+          <div style={{ color: '#5f6368' }}>
+            {hover.emb}: {viewMode === 'descriptive' ? Number(hover.value).toFixed(4) : Number(hover.value).toFixed(4)}
+          </div>
         </div>
       )}
       <div style={{ marginTop: 12, fontSize: 11, color: theme.textSecondary, textAlign: 'center' }}>
-        Classes ordered by the strength of embedding to their respective class (highest on left). Bars within each class ordered by descending embedding importance.
+        {viewMode === 'descriptive' 
+          ? 'Classes ordered by the strength of embedding to their respective class (highest on left). Bars within each class ordered by descending embedding importance.'
+          : 'Classes ordered by normalized frequency of top-2 embeddings. Values represent the proportion of experiments where each embedding ranked in the top 2 for importance.'
+        }
       </div>
     </div>
   )

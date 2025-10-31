@@ -86,6 +86,7 @@ export interface EmbeddingImportance {
   avg_importance: number
   max_importance: number
   occurrences: number
+  top2_frequency: number
 }
 
 export interface ClassPairPerformance {
@@ -130,6 +131,7 @@ export interface EmbeddingRanking {
   max_importance: number
   occurrences: number
   rank: number
+  top2_frequency: number
 }
 
 export interface SyntheticClassStats {
