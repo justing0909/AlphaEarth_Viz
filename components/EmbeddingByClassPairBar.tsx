@@ -167,7 +167,7 @@ export default function EmbeddingByClassPairBar({ data }: EmbeddingByClassPairBa
 
   const globalMaxImportance = Math.max(...currentData.map(item => item.avg_importance))
   const yAxisMax = viewMode === 'probabilistic'
-          ? 1 // for probabilistic, max is 1
+          ? 0.15 // for probabilistic, max is 1
           : Math.ceil(globalMaxImportance * 1.1 * 1000) / 1000 // for descriptive, round up to nearest 10
 
   pageEmbeddings.forEach((embedding, embIdx) => {
