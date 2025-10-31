@@ -172,7 +172,7 @@ export default function Home(){
               fontSize: 12,
               fontWeight: 400
             }}>
-              Research led by <a href="https://gmri.org/about/staff/felipe-benavides/" style={{ color: 'inherit', textDecoration: 'underline' }}>Ivan Felipe Benavides</a>, Postdoctorate Researcher at the Gulf of Maine Research Institute.
+              Research led by <a href="https://gmri.org/about/staff/felipe-benavides/" style={{ color: 'inherit', textDecoration: 'underline' }}>Felipe Benavides</a>, Postdoctorate Researcher at the Gulf of Maine Research Institute.
             </p>
             <p style={{ 
               margin: '8px 0 0 0', 
