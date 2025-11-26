@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@google/earthengine": "^1.7.1",
     "@tanstack/react-query": "^5.87.1",
     "d3": "7.9.0",
     "leaflet": "1.9.4",
@@ -29,8 +30,8 @@
     "@types/node": "20.11.30",
     "@types/react": "18.2.66",
     "eslint": "8.57.0",
-    "eslint-config-next": "14.2.4",
-    "typescript": "5.5.4",
-    "nodemon":"^3.0.1"
+    "eslint-config-next": "^16.0.3",
+    "nodemon": "^3.0.1",
+    "typescript": "5.5.4"
   }
 }

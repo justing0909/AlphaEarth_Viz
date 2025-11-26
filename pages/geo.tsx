@@ -8,6 +8,7 @@ import type { Statistics } from '@/lib/types'
 
 const ROIMap = dynamic(() => import('@/components/ROIMap'), { ssr: false })
 const HeatmapInterpolated = dynamic(() => import('@/components/HeatmapInterpolated'), { ssr: false })
+const WorldCoverFilterExplorer = dynamic(() => import('@/components/WorldCoverFilterExplorer'), { ssr: false })
 
 export default function Geo(){
   const { data: stats, isLoading } = useFetch<Statistics>('statistics', '/api/statistics')
@@ -63,6 +64,33 @@ export default function Geo(){
         }}>
           Experiment regions and performance heatmaps • {stats.summary.experiments_with_bounding_boxes.toLocaleString()} total experiments
         </p>
+
+        {/* ESA WorldCover Explorer */}
+        <div style={{ 
+          background: theme.cardBg,
+          borderRadius: 8,
+          border: `1px solid ${theme.border}`,
+          padding: 20,
+          marginBottom: 24,
+          transition: 'all 0.3s ease'
+        }}>
+          <h2 style={{
+            fontSize: 18,
+            fontWeight: 500,
+            color: theme.textPrimary,
+            marginBottom: 16,
+            transition: 'color 0.3s ease'
+          }}>ESA WorldCover Land Cover Explorer</h2>
+          <p style={{
+            fontSize: 14,
+            color: theme.textSecondary,
+            marginBottom: 16,
+          }}>
+            Explore global land cover classification from ESA WorldCover v100 (2020). 
+            Toggle different land cover classes to visualize their distribution worldwide.
+          </p>
+          <WorldCoverFilterExplorer darkMode={darkMode} />
+        </div>
         
         {/* Bounding Boxes Map */}
         <div style={{ 
