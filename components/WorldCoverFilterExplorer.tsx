@@ -1,5 +1,5 @@
 // components/WorldCoverFilterExplorer.tsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import type { Map as LeafletMap, TileLayer as LeafletTileLayer } from 'leaflet'
 
@@ -10,6 +10,19 @@ const MapContainer = dynamic(
 )
 const TileLayer = dynamic(
   () => import('react-leaflet').then((mod) => mod.TileLayer),
+  { ssr: false }
+)
+const MapInstanceCapture = dynamic(
+  () => import('react-leaflet').then((mod) => {
+    const { useMap } = mod
+    return function MapCapture({ onMapReady }: { onMapReady: (map: any) => void }) {
+      const map = useMap()
+      useEffect(() => {
+        if (map) onMapReady(map)
+      }, [map, onMapReady])
+      return null
+    }
+  }),
   { ssr: false }
 )
 
@@ -43,8 +56,9 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
   const [mapInstance, setMapInstance] = useState<LeafletMap | null>(null)
   const [tileLayers, setTileLayers] = useState<Map<number, LeafletTileLayer>>(new Map())
   const [tileData, setTileData] = useState<Map<number, { urlFormat: string; token: string }>>(new Map())
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const layersRef = useRef<Map<number, LeafletTileLayer>>(new Map())
 
   const theme = {
     bg: darkMode ? '#0f0f0f' : '#fafafa',
@@ -63,25 +77,44 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
       const data = new Map<number, { urlFormat: string; token: string }>()
 
       try {
-        // Fetch tile URLs for all classes
-        const promises = ESA_WORLDCOVER_CLASSES.map(async (cls) => {
-          const response = await fetch('/api/worldcover-tiles', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ classId: cls.value, color: cls.color })
+        // Fetch tile URLs for all classes in parallel
+        const results = await Promise.allSettled(
+          ESA_WORLDCOVER_CLASSES.map(async (cls) => {
+            const response = await fetch('/api/worldcover-tiles', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ classId: cls.value, color: cls.color })
+            })
+
+            if (!response.ok) {
+              const errData = await response.json().catch(() => ({}))
+              throw new Error(errData.error || `Failed to fetch tiles for class ${cls.value}`)
+            }
+
+            const result = await response.json()
+            return { classId: cls.value, urlFormat: result.urlFormat, token: result.token }
           })
+        )
 
-          if (!response.ok) {
-            throw new Error(`Failed to fetch tiles for class ${cls.value}`)
+        let successCount = 0
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            data.set(result.value.classId, { 
+              urlFormat: result.value.urlFormat, 
+              token: result.value.token 
+            })
+            successCount++
+          } else {
+            console.error('Failed to load class:', result.reason)
           }
-
-          const result = await response.json()
-          data.set(cls.value, { urlFormat: result.urlFormat, token: result.token })
         })
 
-        await Promise.all(promises)
+        if (successCount === 0) {
+          throw new Error('Failed to load any Earth Engine tiles. Check your GEE credentials.')
+        }
+
         setTileData(data)
-        console.log('Tile data loaded:', data)
+        console.log(`Tile data loaded: ${successCount}/${ESA_WORLDCOVER_CLASSES.length} classes`)
       } catch (err) {
         console.error('Error fetching tile URLs:', err)
         setError(err instanceof Error ? err.message : 'Failed to load Earth Engine tiles')
@@ -93,38 +126,50 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
     fetchTileUrls()
   }, [])
 
-  // Update map layers when classes or map instance changes
+  // Handle map ready
+  const handleMapReady = (map: LeafletMap) => {
+    console.log('Map instance ready')
+    setMapInstance(map)
+  }
+
+  // Update map layers when classes, map instance, or tile data changes
   useEffect(() => {
-    if (!mapInstance || tileData.size === 0) return
+    if (!mapInstance || tileData.size === 0) {
+      console.log('Waiting for map or tile data...', { hasMap: !!mapInstance, tileDataSize: tileData.size })
+      return
+    }
 
     const L = require('leaflet')
 
-    // Remove all existing tile layers
-    tileLayers.forEach((layer) => {
-      mapInstance.removeLayer(layer)
+    // Remove layers that should no longer be shown
+    layersRef.current.forEach((layer, classId) => {
+      const cls = classes.find(c => c.value === classId)
+      if (!cls?.enabled) {
+        mapInstance.removeLayer(layer)
+        layersRef.current.delete(classId)
+        console.log(`Removed layer for class ${classId}`)
+      }
     })
 
-    // Add new tile layers for enabled classes
-    const newLayers = new Map<number, LeafletTileLayer>()
-    
+    // Add layers that should be shown
     classes.forEach((cls) => {
-      if (cls.enabled) {
+      if (cls.enabled && !layersRef.current.has(cls.value)) {
         const data = tileData.get(cls.value)
         if (data) {
-          console.log(`Adding layer for class ${cls.value}:`, data.urlFormat)
+          console.log(`Adding layer for class ${cls.value}: ${cls.name}`)
           const layer = L.tileLayer(data.urlFormat, {
-            attribution: 'ESA WorldCover',
+            attribution: 'ESA WorldCover © ESA',
             opacity: 0.7,
             maxZoom: 18,
           })
           layer.addTo(mapInstance)
-          newLayers.set(cls.value, layer)
+          layersRef.current.set(cls.value, layer)
         }
       }
     })
 
-    setTileLayers(newLayers)
-    console.log('Active layers:', newLayers.size)
+    setTileLayers(new Map(layersRef.current))
+    console.log('Active layers:', layersRef.current.size)
   }, [classes, mapInstance, tileData])
 
   const toggleClass = (value: number) => {
@@ -141,16 +186,27 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 40, color: theme.textSecondary }}>
-        Loading Earth Engine tiles...
+      <div style={{ 
+        textAlign: 'center', 
+        padding: 40, 
+        color: theme.textSecondary,
+        background: theme.cardBg,
+        borderRadius: 8,
+        border: `1px solid ${theme.border}`
+      }}>
+        <div style={{ fontSize: 24, marginBottom: 12 }}>🛰️</div>
+        <div>Loading Earth Engine tiles...</div>
+        <div style={{ fontSize: 12, marginTop: 8, opacity: 0.7 }}>
+          This may take a moment on first load
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div style={{ 
-        padding: 20, 
+      <div style={{
+        padding: 20,
         background: darkMode ? '#2a1a1a' : '#fff5f5',
         border: `1px solid ${darkMode ? '#ff4444' : '#ffcccc'}`,
         borderRadius: 8,
@@ -158,8 +214,12 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
       }}>
         <strong>Error loading tiles:</strong> {error}
         <p style={{ fontSize: 13, marginTop: 8 }}>
-          Make sure your GEE credentials are configured in .env
+          Make sure your GEE credentials are configured in .env:
         </p>
+        <ul style={{ fontSize: 12, marginTop: 4 }}>
+          <li>GEE_SERVICE_ACCOUNT_EMAIL</li>
+          <li>GEE_PRIVATE_KEY</li>
+        </ul>
       </div>
     )
   }
@@ -227,55 +287,60 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {classes.map((cls) => (
-            <label
-              key={cls.value}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: 8,
-                borderRadius: 4,
-                cursor: 'pointer',
-                transition: 'background 0.2s',
-                background: cls.enabled ? theme.hover : 'transparent',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={cls.enabled}
-                onChange={() => toggleClass(cls.value)}
-                style={{ cursor: 'pointer', width: 16, height: 16 }}
-              />
-              <span
+          {classes.map((cls) => {
+            const hasData = tileData.has(cls.value)
+            return (
+              <label
+                key={cls.value}
                 style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 3,
-                  border: '1px solid rgba(0, 0, 0, 0.2)',
-                  backgroundColor: cls.color,
-                  flexShrink: 0,
-                }}
-              />
-              <span
-                style={{
-                  flex: 1,
-                  fontSize: 14,
-                  color: theme.textPrimary,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: 8,
+                  borderRadius: 4,
+                  cursor: hasData ? 'pointer' : 'not-allowed',
+                  transition: 'background 0.2s',
+                  background: cls.enabled ? theme.hover : 'transparent',
+                  opacity: hasData ? 1 : 0.5,
                 }}
               >
-                {cls.name}
-              </span>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: theme.textSecondary,
-                }}
-              >
-                {cls.value}
-              </span>
-            </label>
-          ))}
+                <input
+                  type="checkbox"
+                  checked={cls.enabled && hasData}
+                  onChange={() => hasData && toggleClass(cls.value)}
+                  disabled={!hasData}
+                  style={{ cursor: hasData ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                />
+                <span
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 3,
+                    border: '1px solid rgba(0, 0, 0, 0.2)',
+                    backgroundColor: cls.color,
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: 14,
+                    color: theme.textPrimary,
+                  }}
+                >
+                  {cls.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: theme.textSecondary,
+                  }}
+                >
+                  {cls.value}
+                </span>
+              </label>
+            )
+          })}
         </div>
 
         <div
@@ -288,7 +353,7 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
           }}
         >
           <p style={{ margin: 0 }}>
-            <strong>Active classes:</strong> {classes.filter((c) => c.enabled).length} / {classes.length}
+            <strong>Active layers:</strong> {layersRef.current.size} / {tileData.size}
           </p>
           <p style={{ margin: '8px 0 0 0' }}>
             Toggle classes to show/hide land cover types on the map.
@@ -301,8 +366,9 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
         {typeof window !== 'undefined' && (
           <MapContainer
             center={[20, 0]}
-            zoom={2}
+            zoom={3}
             style={{ width: '100%', height: '100%', borderRadius: 8 }}
+            scrollWheelZoom={true}
           >
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -312,7 +378,7 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
                   : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
               }
             />
-            {/* ESA WorldCover layers are added programmatically via useEffect */}
+            <MapInstanceCapture onMapReady={handleMapReady} />
           </MapContainer>
         )}
         <div

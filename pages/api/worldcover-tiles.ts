@@ -1,7 +1,6 @@
 // pages/api/worldcover-tiles.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 
-// You'll need to install: npm install @google/earthengine
 const ee = require('@google/earthengine')
 
 type TileResponse = {
@@ -12,24 +11,20 @@ type TileResponse = {
   error: string
 }
 
-// Initialize Earth Engine once with proper locking
 let isInitialized = false
 let initializationPromise: Promise<void> | null = null
 
 async function initializeEE() {
-  // If already initialized, return immediately
   if (isInitialized) {
     console.log('EE already initialized')
     return
   }
 
-  // If initialization is in progress, wait for it
   if (initializationPromise) {
     console.log('Waiting for existing initialization...')
     return initializationPromise
   }
 
-  // Start new initialization
   console.log('Starting new EE initialization...')
   initializationPromise = new Promise(async (resolve, reject) => {
     try {
@@ -43,7 +38,6 @@ async function initializeEE() {
       
       const privateKey = process.env.GEE_PRIVATE_KEY.replace(/\\n/g, '\n')
       
-      // Use the service account credentials object format
       const serviceAccountKey = {
         client_email: process.env.GEE_SERVICE_ACCOUNT_EMAIL,
         private_key: privateKey
@@ -51,7 +45,6 @@ async function initializeEE() {
 
       console.log('Authenticating with service account...')
       
-      // Authenticate using the newer method
       await new Promise<void>((authResolve, authReject) => {
         ee.data.authenticateViaPrivateKey(
           serviceAccountKey,
@@ -68,7 +61,6 @@ async function initializeEE() {
 
       console.log('Initializing Earth Engine API...')
       
-      // Initialize Earth Engine
       await new Promise<void>((initResolve, initReject) => {
         ee.initialize(
           null,
@@ -136,12 +128,30 @@ export default async function handler(
     })
 
     console.log('Map ID generated:', mapId.mapid)
+    console.log('Full mapId object keys:', Object.keys(mapId))
+    
+    // The tile_fetcher provides the correct URL format
+    let urlFormat: string
+    
+    if (mapId.tile_fetcher && mapId.tile_fetcher.url_format) {
+      // Use the tile_fetcher URL if available (newer API)
+      urlFormat = mapId.tile_fetcher.url_format
+      console.log('Using tile_fetcher URL:', urlFormat)
+    } else if (mapId.urlFormat) {
+      // Some versions return urlFormat directly
+      urlFormat = mapId.urlFormat
+      console.log('Using direct urlFormat:', urlFormat)
+    } else {
+      // Fallback: construct URL manually using the correct format
+      // The format should be: https://earthengine.googleapis.com/v1/projects/earthengine-legacy/maps/{mapId}/tiles/{z}/{x}/{y}
+      urlFormat = `https://earthengine.googleapis.com/v1/projects/earthengine-legacy/maps/${mapId.mapid}/tiles/{z}/{x}/{y}`
+      console.log('Using constructed URL:', urlFormat)
+    }
 
-    // Return the tile URL format
     res.status(200).json({
       mapId: mapId.mapid,
-      token: mapId.token,
-      urlFormat: `https://earthengine.googleapis.com/v1alpha/projects/earthengine-legacy/maps/${mapId.mapid}/tiles/{z}/{x}/{y}`
+      token: mapId.token || '',
+      urlFormat: urlFormat
     })
 
   } catch (error) {
