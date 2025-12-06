@@ -69,10 +69,10 @@ export default function ModelAccuracyChart({ data }: ModelAccuracyChartProps) {
 
   // Color scale based on accuracy
   const getColor = (accuracy: number) => {
-    if (accuracy >= 95) return '#22c55e'
-    if (accuracy >= 90) return '#84cc16'
-    if (accuracy >= 85) return '#eab308'
-    if (accuracy >= 80) return '#f97316'
+    if (accuracy >= 89) return '#22c55e'
+    if (accuracy >= 88) return '#84cc16'
+    if (accuracy >= 87) return '#eab308'
+    if (accuracy >= 86) return '#f97316'
     return '#ef4444'
   }
 
@@ -88,7 +88,7 @@ export default function ModelAccuracyChart({ data }: ModelAccuracyChartProps) {
           />
           <YAxis 
             label={{ value: 'Accuracy (%)', angle: -90, position: 'insideLeft', style: { fill: theme.textSecondary } }}
-            domain={[0, 100]}
+            domain={[80, 90]}
             tick={{ fill: theme.textSecondary, fontSize: 12 }}
           />
           <Tooltip 
