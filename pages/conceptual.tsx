@@ -3,19 +3,35 @@ import { useFetch } from '@/lib/useFetch'
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useDarkMode } from '@/lib/useDarkMode'
-import type { Statistics } from '@/lib/types'
+import type {
+  UnifiedMLMatrix,
+  SyntheticClassStats,
+  ClassCooccurrence,
+  EmbeddingCooccurrence,
+  EmbeddingCooccurrenceByClass,
+  EmbeddingRanking,
+} from '@/lib/types'
 
 const EmbeddingByClassPairBar = dynamic(() => import('@/components/EmbeddingByClassPairBar'), { ssr: false })
 const ClassDemandNetwork = dynamic(() => import('@/components/ClassDemandNetwork'), { ssr: false })
 const EmbeddingCooccurrenceNetwork = dynamic(() => import('@/components/EmbeddingCooccurrenceNetwork'), { ssr: false })
 const ClassPerformanceMatrix = dynamic(() => import('@/components/ClassPerformanceMatrix'), { ssr: false })
 const SyntheticDataComparison = dynamic(() => import('@/components/SyntheticDataComparison'), { ssr: false })
-const UnifiedMLMatrix = dynamic(() => import('@/components/ClassPerformanceMatrix'), { ssr: false })
+const UnifiedMLMatrixComponent = dynamic(() => import('@/components/ClassPerformanceMatrix'), { ssr: false })
 
 type ViewType = 'embedding-universe' | 'performance' | 'unified-matrix' | 'synthetic' | 'class-network' | 'embedding-network' | 'grouped'
 
 export default function Conceptual(){
-  const { data: stats, isLoading } = useFetch<Statistics>('statistics', '/api/statistics')
+  // Fetch only the sections this page actually uses
+  const { data: unifiedMatrix, isLoading: loadingMatrix }     = useFetch<UnifiedMLMatrix[]>('stats/unified_ml_matrix', '/api/statistics?section=unified_ml_matrix')
+  const { data: syntheticStats, isLoading: loadingSynthetic } = useFetch<SyntheticClassStats[]>('stats/synthetic_class_stats', '/api/statistics?section=synthetic_class_stats')
+  const { data: classCooc, isLoading: loadingClassCooc }      = useFetch<ClassCooccurrence[]>('stats/class_cooccurrence', '/api/statistics?section=class_cooccurrence')
+  const { data: embCooc, isLoading: loadingEmbCooc }          = useFetch<EmbeddingCooccurrence[]>('stats/embedding_cooccurrence', '/api/statistics?section=embedding_cooccurrence')
+  const { data: embCoocByClass, isLoading: loadingEmbCoocBC } = useFetch<EmbeddingCooccurrenceByClass[]>('stats/embedding_cooccurrence_by_class', '/api/statistics?section=embedding_cooccurrence_by_class')
+  const { data: embRankings, isLoading: loadingRankings }     = useFetch<EmbeddingRanking[]>('stats/embedding_rankings_by_class', '/api/statistics?section=embedding_rankings_by_class')
+
+  const isLoading = loadingMatrix || loadingSynthetic || loadingClassCooc || loadingEmbCooc || loadingEmbCoocBC || loadingRankings
+
   const [activeView, setActiveView] = useState<ViewType>('embedding-universe')
   const { darkMode } = useDarkMode()
 
@@ -41,7 +57,7 @@ export default function Conceptual(){
     { id: 'grouped', label: 'Importance Bar Chart By Embedding', description: 'Embedding importance comparison by class pair' }
   ]
 
-  if (isLoading || !stats) {
+  if (isLoading || !unifiedMatrix || !syntheticStats || !classCooc || !embCooc || !embCoocByClass || !embRankings) {
     return (
       <Layout darkMode={darkMode}>
         <div style={{ padding: 60, textAlign: 'center', color: theme.textSecondary }}>
@@ -53,15 +69,15 @@ export default function Conceptual(){
 
   return (
     <Layout darkMode={darkMode}>
-      <div style={{ 
-        maxWidth: 1600, 
-        margin: '0 auto', 
-        padding: '40px 24px', 
+      <div style={{
+        maxWidth: 1600,
+        margin: '0 auto',
+        padding: '40px 24px',
         background: theme.bg,
         minHeight: '100vh',
         transition: 'background 0.3s ease'
       }}>
-        <h1 style={{ 
+        <h1 style={{
           textAlign: 'center',
           fontSize: 36,
           fontWeight: 300,
@@ -70,14 +86,14 @@ export default function Conceptual(){
           letterSpacing: '-0.5px',
           transition: 'color 0.3s ease'
         }}>Class & Embedding Analysis</h1>
-        <p style={{ 
+        <p style={{
           textAlign: 'center',
           color: theme.textSecondary,
           fontSize: 15,
           marginBottom: 32,
           transition: 'color 0.3s ease'
         }}>Understanding classification performance and embedding relationships</p>
-      
+
         <div style={{ marginTop: 24, marginBottom: 24 }}>
           <div style={{ display: 'flex', gap: 8, borderBottom: `2px solid ${theme.border}`, paddingBottom: 0, flexWrap: 'wrap', justifyContent: 'center' }}>
             {views.map(view => (
@@ -121,17 +137,17 @@ export default function Conceptual(){
               />
             </div>
           )}
-          {activeView === 'performance' && <ClassPerformanceMatrix data={stats.unified_ml_matrix} />}
-          {activeView === 'unified-matrix' && <UnifiedMLMatrix data={stats.unified_ml_matrix} />}
-          {activeView === 'synthetic' && <SyntheticDataComparison data={stats.synthetic_class_stats} />}
-          {activeView === 'class-network' && <ClassDemandNetwork data={stats.class_cooccurrence} />}
+          {activeView === 'performance' && <ClassPerformanceMatrix data={unifiedMatrix} />}
+          {activeView === 'unified-matrix' && <UnifiedMLMatrixComponent data={unifiedMatrix} />}
+          {activeView === 'synthetic' && <SyntheticDataComparison data={syntheticStats} />}
+          {activeView === 'class-network' && <ClassDemandNetwork data={classCooc} />}
           {activeView === 'embedding-network' && (
-            <EmbeddingCooccurrenceNetwork 
-              cooccurrenceData={stats.embedding_cooccurrence}
-              cooccurrenceByClass={stats.embedding_cooccurrence_by_class}
+            <EmbeddingCooccurrenceNetwork
+              cooccurrenceData={embCooc}
+              cooccurrenceByClass={embCoocByClass}
             />
           )}
-          {activeView === 'grouped' && <EmbeddingByClassPairBar data={stats.embedding_rankings_by_class} />}
+          {activeView === 'grouped' && <EmbeddingByClassPairBar data={embRankings} />}
         </div>
 
         <div style={{ marginTop: 24, padding: 20, background: theme.infoBg, borderRadius: 8, fontSize: 14, lineHeight: 1.6, border: `1px solid ${theme.border}`, transition: 'all 0.3s ease' }}>
@@ -140,7 +156,7 @@ export default function Conceptual(){
             <li><strong>Embedding Universe:</strong> Interactive visualization showing exclusive (green) and shared (gold) embeddings for each land cover class</li>
             <li><strong>Class Performance:</strong> See precision/recall/F1/accuracy for each class pair</li>
             <li><strong>Synthetic Spotlight (Armenia):</strong> Focus on synthetic experiments showing ML performance by class</li>
-            <li><strong>Class Demand Network:</strong> Ecplore the distribution of classification pairs</li>
+            <li><strong>Class Demand Network:</strong> Explore the distribution of classification pairs</li>
             <li><strong>Embedding Co-occurrence Network:</strong> Explore the distribution of embedding pairs during each classification experiment</li>
             <li><strong>Importance Bar Chart By Embedding:</strong> Compare embedding importance rankings across classes</li>
           </ul>

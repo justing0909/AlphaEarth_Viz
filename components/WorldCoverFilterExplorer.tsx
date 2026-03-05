@@ -33,6 +33,14 @@ interface LandCoverClass {
   enabled: boolean
 }
 
+interface IoUResult {
+  intersectionArea: number
+  unionArea: number
+  percentage: number
+  class1: number
+  class2: number
+}
+
 const ESA_WORLDCOVER_CLASSES: LandCoverClass[] = [
   { value: 10, name: 'Tree cover', color: '#006400', enabled: true },
   { value: 20, name: 'Shrubland', color: '#ffbb22', enabled: true },
@@ -60,13 +68,23 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
   const [error, setError] = useState<string | null>(null)
   const layersRef = useRef<Map<number, LeafletTileLayer>>(new Map())
 
+  // IoU comparison state
+  const [iouClass1, setIouClass1] = useState<number>(ESA_WORLDCOVER_CLASSES[0].value)
+  const [iouClass2, setIouClass2] = useState<number>(ESA_WORLDCOVER_CLASSES[1].value)
+  const [iouResult, setIouResult] = useState<IoUResult | null>(null)
+  const [iouLoading, setIouLoading] = useState(false)
+  const [iouError, setIouError] = useState<string | null>(null)
+  const [showIoU, setShowIoU] = useState(false)
+
   const theme = {
     bg: darkMode ? '#0f0f0f' : '#fafafa',
     cardBg: darkMode ? '#1a1a1a' : '#fff',
     textPrimary: darkMode ? '#e8e8e8' : '#202124',
     textSecondary: darkMode ? '#a8a8a8' : '#5f6368',
     border: darkMode ? '#333' : '#dadce0',
-    hover: darkMode ? '#2a2a2a' : '#f9f9f9'
+    hover: darkMode ? '#2a2a2a' : '#f9f9f9',
+    accent: darkMode ? '#4a9eff' : '#1a73e8',
+    accentBg: darkMode ? '#1a2a3a' : '#e8f0fe',
   }
 
   // Fetch tile URLs from API when component mounts
@@ -99,9 +117,9 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
         let successCount = 0
         results.forEach((result) => {
           if (result.status === 'fulfilled') {
-            data.set(result.value.classId, { 
-              urlFormat: result.value.urlFormat, 
-              token: result.value.token 
+            data.set(result.value.classId, {
+              urlFormat: result.value.urlFormat,
+              token: result.value.token
             })
             successCount++
           } else {
@@ -184,11 +202,56 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
     setClasses((prev) => prev.map((cls) => ({ ...cls, enabled: enable })))
   }
 
+  // IoU comparison handler
+  const calculateIoU = async () => {
+    if (iouClass1 === iouClass2) {
+      setIouError('Please select two different classes to compare.')
+      return
+    }
+
+    setIouLoading(true)
+    setIouError(null)
+    setIouResult(null)
+
+    try {
+      const response = await fetch('/api/worldcover-intersection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ class1: iouClass1, class2: iouClass2 })
+      })
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.error || 'Failed to calculate intersection')
+      }
+
+      const result: IoUResult = await response.json()
+      setIouResult(result)
+    } catch (err) {
+      console.error('IoU calculation error:', err)
+      setIouError(err instanceof Error ? err.message : 'Failed to calculate intersection')
+    } finally {
+      setIouLoading(false)
+    }
+  }
+
+  const getClassName = (value: number) =>
+    ESA_WORLDCOVER_CLASSES.find(c => c.value === value)?.name ?? `Class ${value}`
+
+  const getClassColor = (value: number) =>
+    ESA_WORLDCOVER_CLASSES.find(c => c.value === value)?.color ?? '#888'
+
+  const formatArea = (km2: number) => {
+    if (km2 >= 1_000_000) return `${(km2 / 1_000_000).toFixed(2)}M km²`
+    if (km2 >= 1_000) return `${(km2 / 1_000).toFixed(1)}K km²`
+    return `${km2.toFixed(1)} km²`
+  }
+
   if (loading) {
     return (
-      <div style={{ 
-        textAlign: 'center', 
-        padding: 40, 
+      <div style={{
+        textAlign: 'center',
+        padding: 40,
         color: theme.textSecondary,
         background: theme.cardBg,
         borderRadius: 8,
@@ -225,178 +288,373 @@ export default function WorldCoverFilterExplorer({ darkMode }: WorldCoverFilterE
   }
 
   return (
-    <div style={{ display: 'flex', gap: 20, height: 600 }}>
-      {/* Filter Panel */}
-      <div
-        style={{
-          width: 280,
-          background: theme.cardBg,
-          border: `1px solid ${theme.border}`,
-          borderRadius: 8,
-          padding: 16,
-          overflowY: 'auto',
-          transition: 'all 0.3s ease',
-        }}
-      >
-        <div style={{ marginBottom: 16 }}>
-          <h3
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', gap: 20, height: 600 }}>
+        {/* Filter Panel */}
+        <div
+          style={{
+            width: 280,
+            background: theme.cardBg,
+            border: `1px solid ${theme.border}`,
+            borderRadius: 8,
+            padding: 16,
+            overflowY: 'auto',
+            transition: 'all 0.3s ease',
+          }}
+        >
+          <div style={{ marginBottom: 16 }}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 16,
+                fontWeight: 500,
+                color: theme.textPrimary,
+                marginBottom: 12,
+              }}
+            >
+              Land Cover Classes
+            </h3>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button
+                onClick={() => toggleAll(true)}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  border: `1px solid ${theme.border}`,
+                  background: theme.cardBg,
+                  color: theme.textPrimary,
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                Select All
+              </button>
+              <button
+                onClick={() => toggleAll(false)}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  fontSize: 13,
+                  border: `1px solid ${theme.border}`,
+                  background: theme.cardBg,
+                  color: theme.textPrimary,
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {classes.map((cls) => {
+              const hasData = tileData.has(cls.value)
+              return (
+                <label
+                  key={cls.value}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: 8,
+                    borderRadius: 4,
+                    cursor: hasData ? 'pointer' : 'not-allowed',
+                    transition: 'background 0.2s',
+                    background: cls.enabled ? theme.hover : 'transparent',
+                    opacity: hasData ? 1 : 0.5,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={cls.enabled && hasData}
+                    onChange={() => hasData && toggleClass(cls.value)}
+                    disabled={!hasData}
+                    style={{ cursor: hasData ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
+                  />
+                  <span
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 3,
+                      border: '1px solid rgba(0, 0, 0, 0.2)',
+                      backgroundColor: cls.color,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span
+                    style={{
+                      flex: 1,
+                      fontSize: 14,
+                      color: theme.textPrimary,
+                    }}
+                  >
+                    {cls.name}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: theme.textSecondary,
+                    }}
+                  >
+                    {cls.value}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+
+          <div
             style={{
-              margin: 0,
-              fontSize: 16,
-              fontWeight: 500,
-              color: theme.textPrimary,
-              marginBottom: 12,
+              marginTop: 16,
+              paddingTop: 16,
+              borderTop: `1px solid ${theme.border}`,
+              fontSize: 12,
+              color: theme.textSecondary,
             }}
           >
-            Land Cover Classes
-          </h3>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-            <button
-              onClick={() => toggleAll(true)}
-              style={{
-                flex: 1,
-                padding: '6px 12px',
-                fontSize: 13,
-                border: `1px solid ${theme.border}`,
-                background: theme.cardBg,
-                color: theme.textPrimary,
-                borderRadius: 4,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-            >
-              Select All
-            </button>
-            <button
-              onClick={() => toggleAll(false)}
-              style={{
-                flex: 1,
-                padding: '6px 12px',
-                fontSize: 13,
-                border: `1px solid ${theme.border}`,
-                background: theme.cardBg,
-                color: theme.textPrimary,
-                borderRadius: 4,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-              }}
-            >
-              Clear All
-            </button>
+            <p style={{ margin: 0 }}>
+              <strong>Active layers:</strong> {layersRef.current.size} / {tileData.size}
+            </p>
+            <p style={{ margin: '8px 0 0 0' }}>
+              Toggle classes to show/hide land cover types on the map.
+            </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {classes.map((cls) => {
-            const hasData = tileData.has(cls.value)
-            return (
-              <label
-                key={cls.value}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: 8,
-                  borderRadius: 4,
-                  cursor: hasData ? 'pointer' : 'not-allowed',
-                  transition: 'background 0.2s',
-                  background: cls.enabled ? theme.hover : 'transparent',
-                  opacity: hasData ? 1 : 0.5,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={cls.enabled && hasData}
-                  onChange={() => hasData && toggleClass(cls.value)}
-                  disabled={!hasData}
-                  style={{ cursor: hasData ? 'pointer' : 'not-allowed', width: 16, height: 16 }}
-                />
-                <span
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 3,
-                    border: '1px solid rgba(0, 0, 0, 0.2)',
-                    backgroundColor: cls.color,
-                    flexShrink: 0,
-                  }}
-                />
-                <span
-                  style={{
-                    flex: 1,
-                    fontSize: 14,
-                    color: theme.textPrimary,
-                  }}
-                >
-                  {cls.name}
-                </span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    color: theme.textSecondary,
-                  }}
-                >
-                  {cls.value}
-                </span>
-              </label>
-            )
-          })}
-        </div>
-
-        <div
-          style={{
-            marginTop: 16,
-            paddingTop: 16,
-            borderTop: `1px solid ${theme.border}`,
-            fontSize: 12,
-            color: theme.textSecondary,
-          }}
-        >
-          <p style={{ margin: 0 }}>
-            <strong>Active layers:</strong> {layersRef.current.size} / {tileData.size}
-          </p>
-          <p style={{ margin: '8px 0 0 0' }}>
-            Toggle classes to show/hide land cover types on the map.
-          </p>
+        {/* Map */}
+        <div style={{ flex: 1, position: 'relative' }}>
+          {typeof window !== 'undefined' && (
+            <MapContainer
+              center={[20, 0]}
+              zoom={3}
+              style={{ width: '100%', height: '100%', borderRadius: 8 }}
+              scrollWheelZoom={true}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                url={
+                  darkMode
+                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+                }
+              />
+              <MapInstanceCapture onMapReady={handleMapReady} />
+            </MapContainer>
+          )}
+          <div
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              background: theme.cardBg,
+              border: `1px solid ${theme.border}`,
+              borderRadius: 6,
+              padding: '8px 12px',
+              fontSize: 12,
+              color: theme.textSecondary,
+              zIndex: 1000,
+            }}
+          >
+            ESA WorldCover v200 (2021)
+          </div>
         </div>
       </div>
 
-      {/* Map */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        {typeof window !== 'undefined' && (
-          <MapContainer
-            center={[20, 0]}
-            zoom={3}
-            style={{ width: '100%', height: '100%', borderRadius: 8 }}
-            scrollWheelZoom={true}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url={
-                darkMode
-                  ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                  : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-              }
-            />
-            <MapInstanceCapture onMapReady={handleMapReady} />
-          </MapContainer>
-        )}
-        <div
+      {/* IoU Comparison Panel */}
+      <div
+        style={{
+          background: theme.cardBg,
+          border: `1px solid ${theme.border}`,
+          borderRadius: 8,
+          overflow: 'hidden',
+          transition: 'all 0.3s ease',
+        }}
+      >
+        <button
+          onClick={() => setShowIoU(!showIoU)}
           style={{
-            position: 'absolute',
-            top: 12,
-            right: 12,
-            background: theme.cardBg,
-            border: `1px solid ${theme.border}`,
-            borderRadius: 6,
-            padding: '8px 12px',
-            fontSize: 12,
-            color: theme.textSecondary,
-            zIndex: 1000,
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '12px 16px',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            color: theme.textPrimary,
+            fontSize: 15,
+            fontWeight: 500,
           }}
         >
-          ESA WorldCover v200 (2021)
-        </div>
+          <span>Class Intersection Analysis (IoU)</span>
+          <span style={{ fontSize: 12, color: theme.textSecondary }}>
+            {showIoU ? '▲ Collapse' : '▼ Expand'}
+          </span>
+        </button>
+
+        {showIoU && (
+          <div style={{ padding: '0 16px 16px' }}>
+            <p style={{ fontSize: 13, color: theme.textSecondary, margin: '0 0 16px 0' }}>
+              Compare two land cover classes by computing their Intersection over Union (IoU) globally.
+            </p>
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <label style={{ fontSize: 12, color: theme.textSecondary, display: 'block', marginBottom: 4 }}>
+                  Class 1
+                </label>
+                <select
+                  value={iouClass1}
+                  onChange={(e) => setIouClass1(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    fontSize: 13,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 4,
+                    background: theme.cardBg,
+                    color: theme.textPrimary,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {ESA_WORLDCOVER_CLASSES.map((cls) => (
+                    <option key={cls.value} value={cls.value}>
+                      {cls.name} ({cls.value})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ flex: 1, minWidth: 160 }}>
+                <label style={{ fontSize: 12, color: theme.textSecondary, display: 'block', marginBottom: 4 }}>
+                  Class 2
+                </label>
+                <select
+                  value={iouClass2}
+                  onChange={(e) => setIouClass2(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    fontSize: 13,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 4,
+                    background: theme.cardBg,
+                    color: theme.textPrimary,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {ESA_WORLDCOVER_CLASSES.map((cls) => (
+                    <option key={cls.value} value={cls.value}>
+                      {cls.name} ({cls.value})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={calculateIoU}
+                disabled={iouLoading}
+                style={{
+                  padding: '8px 20px',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  border: 'none',
+                  borderRadius: 4,
+                  background: iouLoading ? theme.border : theme.accent,
+                  color: '#fff',
+                  cursor: iouLoading ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {iouLoading ? 'Computing...' : 'Calculate IoU'}
+              </button>
+            </div>
+
+            {iouError && (
+              <div style={{
+                marginTop: 12,
+                padding: '8px 12px',
+                fontSize: 13,
+                background: darkMode ? '#2a1a1a' : '#fff5f5',
+                border: `1px solid ${darkMode ? '#ff4444' : '#ffcccc'}`,
+                borderRadius: 4,
+                color: darkMode ? '#ff8888' : '#cc0000',
+              }}>
+                {iouError}
+              </div>
+            )}
+
+            {iouResult && (
+              <div style={{
+                marginTop: 16,
+                padding: 16,
+                background: theme.accentBg,
+                borderRadius: 6,
+                border: `1px solid ${theme.border}`,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 2,
+                      backgroundColor: getClassColor(iouResult.class1),
+                      border: '1px solid rgba(0,0,0,0.2)',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: theme.textPrimary, fontWeight: 500 }}>
+                    {getClassName(iouResult.class1)}
+                  </span>
+                  <span style={{ fontSize: 12, color: theme.textSecondary, margin: '0 4px' }}>×</span>
+                  <span
+                    style={{
+                      width: 14,
+                      height: 14,
+                      borderRadius: 2,
+                      backgroundColor: getClassColor(iouResult.class2),
+                      border: '1px solid rgba(0,0,0,0.2)',
+                    }}
+                  />
+                  <span style={{ fontSize: 13, color: theme.textPrimary, fontWeight: 500 }}>
+                    {getClassName(iouResult.class2)}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      IoU
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 600, color: theme.accent }}>
+                      {iouResult.percentage.toFixed(2)}%
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Intersection Area
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 500, color: theme.textPrimary }}>
+                      {formatArea(iouResult.intersectionArea)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: theme.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Union Area
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 500, color: theme.textPrimary }}>
+                      {formatArea(iouResult.unionArea)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
