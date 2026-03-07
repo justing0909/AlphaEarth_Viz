@@ -302,6 +302,49 @@ export default function Home(){
               transition: 'all 0.3s ease'
             }}>
               <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
+                Plot Title Here
+              </h2>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 400,
+                backgroundColor: theme.headerBg,
+                borderRadius: 4,
+                border: `1px solid ${theme.border}`
+              }}>
+                <img
+                  src="/fingerprint_plot.png"
+                  alt="Plot visualization"
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    height: 'auto',
+                    filter: darkMode ? 'invert(1) hue-rotate(180deg)' : 'none'
+                  }}
+                />
+              </div>
+              <div style={{
+                marginTop: 12,
+                fontSize: 11,
+                color: theme.textSecondary,
+                textAlign: 'center'
+              }}>
+                Description of the plot goes here
+              </div>
+            </div>
+
+            <div style={{
+              background: theme.cardBg,
+              borderRadius: 8,
+              border: `1px solid ${theme.border}`,
+              padding: 20,
+              width: '100%',
+              maxWidth: '100%',
+              boxSizing: 'border-box',
+              transition: 'all 0.3s ease'
+            }}>
+              <h2 style={{ fontSize: 15, fontWeight: 500, marginBottom: 16, color: theme.textPrimary, textTransform: 'uppercase', letterSpacing: '0.5px', transition: 'color 0.3s ease' }}>
                 Where are People Experimenting?
               </h2>
               <CountryMap data={countryDist} />
