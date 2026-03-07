@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/DOI/YOUR_DOI.svg)](https://doi.org/10.5281/zenodo.17728053)
 # AlphaEarth Visualization App
 Front end application available at: https://alpha-earth-viz.vercel.app/
 
@@ -27,6 +28,20 @@ React-Leaflet for the map, Plotly/Recharts for charts, and simple API routes to 
 We use the public XYZ URL:
 https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}
 
+## Citation
+
+If you use this dashboard or its outputs in your research, please cite both the dashboard and the accompanying paper:
+
+**Dashboard:**
+```bibtex
+@software{guthrie_benavides_2025_dashboard,
+  author       = {Guthrie, Justin and Benavides, Iván Felipe},
+  title        = {{What on Earth is AlphaEarth? Interactive Dashboard (Version v1)}},
+  year         = {2025},
+  doi          = {YOUR_ZENODO_DOI_HERE},
+  url          = {https://alpha-earth-viz.vercel.app/}
+}
+```
 
 ## Credits
 Initial research led by Felipe Benavides, Postdoctorate Researcher at the Gulf of Maine Research Institute and Northeastern University's Sustainability and Data Sciences Laboratory.
