@@ -1,4 +1,4 @@
-[![DOI](https://zenodo.org/badge/DOI/YOUR_DOI.svg)](https://doi.org/10.5281/zenodo.17728053)
+[![DOI](https://zenodo.org/badge/DOI/zenodo.17728053.svg)](https://doi.org/10.5281/zenodo.17728053)
 # AlphaEarth Visualization App
 Front end application available at: https://alpha-earth-viz.vercel.app/
 
