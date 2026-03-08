@@ -21,7 +21,7 @@ export default function Home(){
   const { data: generatedAt, isLoading: loadingGenAt }       = useFetch<string>('stats/generated_at', '/api/statistics?section=generated_at')
   const { data: modelPerf, isLoading: loadingModel }         = useFetch<ModelPerformance[]>('stats/model_performance', '/api/statistics?section=model_performance')
   const { data: recentExp, isLoading: loadingRecent }        = useFetch<RecentExperiment[]>('stats/recent_experiments', '/api/statistics?section=recent_experiments')
-  const { data: countryDist, isLoading: loadingCountry }     = useFetch<CountryDistribution[]>('stats/country_distribution', '/api/statistics?section=country_distribution')
+  const { data: countryDist, isLoading: loadingCountry }     = useFetch<CountryDistribution[]>('stats/country_distribution', '/api/country-distribution-csv')
   const { data: embImportance, isLoading: loadingEmb }       = useFetch<EmbeddingImportance[]>('stats/embedding_importance_by_class', '/api/statistics?section=embedding_importance_by_class')
 
   const isLoading = loadingMeta || loadingGenAt || loadingModel || loadingRecent || loadingCountry || loadingEmb
