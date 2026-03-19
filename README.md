@@ -1,7 +1,7 @@
 [![DOI](https://zenodo.org/badge/DOI/zenodo.17728053.svg)](https://doi.org/10.5281/zenodo.17728053)
 # AlphaEarth Visualization App
 
-[![DOI](https://zenodo.org/badge/DOI/YOUR_ZENODO_DOI_HERE.svg)](https://doi.org/YOUR_ZENODO_DOI_HERE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17728053.svg)](https://doi.org/10.5281/zenodo.17728053)
 
 Front end application available at: [https://alpha-earth-viz.vercel.app/](https://alpha-earth-viz.vercel.app/)
 
