@@ -34,4 +34,5 @@ coverage/
 data/statistics.json
 *.sh
 data/*.csv
+!data/AlphaEarth_dashboard_citizen_science_data.csv
 data/sample_statistics.json
